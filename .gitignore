@@ -1,0 +1,27 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment
+.env
+*.env
+
+# Temp audio files
+temp/
+*.mp3
+*.wav
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Tests
+.pytest_cache/
+*.egg-info/
