@@ -3,6 +3,8 @@ uvicorn[standard]==0.24.0
 openai-whisper==20231117
 gtts==2.5.1
 pydub==0.25.1
+# PyAudio: on Windows use: pip install pipwin && pipwin install pyaudio
+PyAudio==0.2.14
 python-dotenv==1.0.0
 qrcode[pil]==7.4.2
 pillow==10.1.0
