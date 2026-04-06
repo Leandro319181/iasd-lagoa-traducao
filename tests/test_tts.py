@@ -34,3 +34,15 @@ def test_text_to_speech_usa_idioma_ingles(tmp_path):
     call_kwargs = mock_gtts_class.call_args[1]
     assert call_kwargs["lang"] == "en"
     assert call_kwargs["text"] == "Hello"
+
+
+def test_text_to_speech_retorna_none_quando_gtts_falha(tmp_path):
+    """Garante que falha do gTTS retorna None em vez de crashar."""
+    mock_gtts_class = MagicMock()
+    mock_gtts_class.return_value.save.side_effect = Exception("Network error")
+
+    with patch("tts.gTTS", mock_gtts_class):
+        import tts
+        result = tts.text_to_speech("Hello", output_dir=str(tmp_path))
+
+    assert result is None

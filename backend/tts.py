@@ -27,7 +27,13 @@ def text_to_speech(text: str, output_dir: str = "temp") -> Optional[str]:
     filepath = os.path.join(output_dir, f"{audio_id}.mp3")
 
     # Cria o áudio em inglês e salva no disco
-    tts = gTTS(text=text, lang="en")
-    tts.save(filepath)
+    try:
+        tts = gTTS(text=text, lang="en")
+        tts.save(filepath)
+    except Exception as e:
+        # Se gTTS falhar (internet lenta, serviço fora), retorna None
+        # O servidor vai mostrar só a legenda, sem áudio neste chunk
+        print(f"[TTS] Erro ao sintetizar áudio: {e}")
+        return None
 
     return audio_id
