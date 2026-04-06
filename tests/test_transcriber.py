@@ -1,9 +1,5 @@
-import sys
-from unittest.mock import MagicMock
-sys.modules['whisper'] = MagicMock()
-
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import os
 
 
@@ -56,3 +52,12 @@ def test_transcribe_sem_modelo_lanca_erro(tmp_path):
         import transcriber
         with pytest.raises(RuntimeError, match="load_model"):
             transcriber.transcribe_and_translate(str(wav_file))
+
+
+def test_load_model_usa_small_como_padrao():
+    """Garante que o modelo padrão é 'small' quando nenhum argumento é passado."""
+    with patch("transcriber.whisper") as mock_whisper:
+        import transcriber
+        transcriber._model = None
+        transcriber.load_model()
+        mock_whisper.load_model.assert_called_once_with("small")

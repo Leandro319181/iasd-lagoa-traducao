@@ -1,10 +1,10 @@
-from __future__ import annotations
+from typing import Optional
 import os
 import whisper
 
 # Variável global que guarda o modelo carregado
 # (carregamos só uma vez para não gastar tempo toda vez)
-_model = None
+_model: Optional[object] = None
 
 
 def load_model(model_name: str = "small"):
@@ -38,6 +38,8 @@ def transcribe_and_translate(wav_path: str) -> str:
     # task="translate" faz o Whisper transcrever E traduzir para inglês diretamente
     result = _model.transcribe(wav_path, task="translate")
     text = result["text"].strip()
+    if not text:
+        return ""
 
     # Deleta o .wav temporário para não encher o disco
     if os.path.exists(wav_path):
