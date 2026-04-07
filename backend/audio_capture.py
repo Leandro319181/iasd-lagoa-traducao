@@ -34,6 +34,18 @@ def list_audio_devices():
     p.terminate()
 
 
+def _get_channels(p: pyaudio.PyAudio, device_index: Optional[int]) -> int:
+    """Retorna o número de canais suportados pelo dispositivo (1 ou 2)."""
+    try:
+        info = p.get_device_info_by_index(
+            device_index if device_index is not None else p.get_default_input_device_info()["index"]
+        )
+        max_ch = int(info["maxInputChannels"])
+        return 1 if max_ch >= 1 else max_ch
+    except Exception:
+        return 1
+
+
 def _capture_loop(output_queue: queue.Queue, device_index: Optional[int], stop_event: threading.Event):
     """
     Loop de captura que roda em uma thread separada.
@@ -42,9 +54,11 @@ def _capture_loop(output_queue: queue.Queue, device_index: Optional[int], stop_e
     """
     p = pyaudio.PyAudio()
 
+    channels = _get_channels(p, device_index)
+
     stream = p.open(
         format=FORMAT,
-        channels=CHANNELS,
+        channels=channels,
         rate=RATE,
         input=True,
         input_device_index=device_index,  # None = dispositivo padrão
@@ -65,7 +79,7 @@ def _capture_loop(output_queue: queue.Queue, device_index: Optional[int], stop_e
                 frames.append(data)
 
             if frames:
-                wav_path = _save_wav(frames, p)
+                wav_path = _save_wav(frames, p, channels)
                 output_queue.put(wav_path)
 
     finally:
@@ -75,13 +89,13 @@ def _capture_loop(output_queue: queue.Queue, device_index: Optional[int], stop_e
         print("Captura de áudio encerrada.")
 
 
-def _save_wav(frames: list, p: pyaudio.PyAudio) -> str:
+def _save_wav(frames: list, p: pyaudio.PyAudio, channels: int = 1) -> str:
     """Salva os frames capturados como arquivo .wav temporário."""
     os.makedirs("temp", exist_ok=True)
     wav_path = f"temp/{uuid.uuid4()}.wav"
 
     with wave.open(wav_path, "wb") as wf:
-        wf.setnchannels(CHANNELS)
+        wf.setnchannels(channels)
         wf.setsampwidth(p.get_sample_size(FORMAT))
         wf.setframerate(RATE)
         wf.writeframes(b"".join(frames))
