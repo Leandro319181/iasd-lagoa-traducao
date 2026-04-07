@@ -54,18 +54,29 @@ def _capture_loop(output_queue: queue.Queue, device_index: Optional[int], stop_e
     """
     p = pyaudio.PyAudio()
 
-    channels = _get_channels(p, device_index)
+    max_ch = _get_channels(p, device_index)
+    stream = None
+    channels = 1
+    for ch in sorted(set([1, 2, max_ch])):
+        try:
+            stream = p.open(
+                format=FORMAT,
+                channels=ch,
+                rate=RATE,
+                input=True,
+                input_device_index=device_index,
+                frames_per_buffer=CHUNK,
+            )
+            channels = ch
+            break
+        except Exception:
+            continue
 
-    stream = p.open(
-        format=FORMAT,
-        channels=channels,
-        rate=RATE,
-        input=True,
-        input_device_index=device_index,  # None = dispositivo padrão
-        frames_per_buffer=CHUNK,
-    )
+    if stream is None:
+        p.terminate()
+        raise RuntimeError(f"Não foi possível abrir o microfone (device_index={device_index}). Verifique o AUDIO_DEVICE_INDEX no .env")
 
-    print(f"Capturando áudio... (chunks de {RECORD_SECONDS}s)")
+    print(f"Capturando áudio... (chunks de {RECORD_SECONDS}s, canais={channels})")
 
     try:
         while not stop_event.is_set():
