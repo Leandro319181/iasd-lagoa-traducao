@@ -41,7 +41,7 @@ def _get_channels(p: pyaudio.PyAudio, device_index: Optional[int]) -> int:
             device_index if device_index is not None else p.get_default_input_device_info()["index"]
         )
         max_ch = int(info["maxInputChannels"])
-        return 1 if max_ch >= 1 else max_ch
+        return max_ch if max_ch > 0 else 1
     except Exception:
         return 1
 
