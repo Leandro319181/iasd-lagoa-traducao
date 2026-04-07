@@ -22,6 +22,20 @@
         </main>
 
         <div class="controls">
+            <!-- Seleção de voz (visível só para o operador) -->
+            <div class="voice-selector">
+                <span class="controls-label">Speaker voice</span>
+                <div class="voice-buttons">
+                    <button id="btn-female" class="voice-btn active" onclick="setVoice('female')">
+                        👩 Female
+                    </button>
+                    <button id="btn-male" class="voice-btn" onclick="setVoice('male')">
+                        👨 Male
+                    </button>
+                </div>
+            </div>
+
+            <!-- Toggle de áudio pessoal -->
             <button id="audio-toggle" class="audio-btn audio-on" onclick="toggleAudio()">
                 🔊 Audio ON
             </button>

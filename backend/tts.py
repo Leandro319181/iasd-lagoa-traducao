@@ -1,39 +1,52 @@
 from __future__ import annotations
+import asyncio
 import os
 import uuid
 from typing import Optional
-from gtts import gTTS
+
+import edge_tts
+
+# Vozes disponíveis (Microsoft Edge TTS — alta qualidade, grátis)
+VOICE_MALE   = "en-US-ChristopherNeural"
+VOICE_FEMALE = "en-US-JennyNeural"
 
 
-def text_to_speech(text: str, output_dir: str = "temp") -> Optional[str]:
+def text_to_speech(
+    text: str,
+    voice: str = "female",
+    output_dir: str = "temp",
+) -> Optional[str]:
     """
-    Converte texto em inglês para um arquivo de áudio .mp3.
-    Retorna o ID único do arquivo (sem extensão) ou None se o texto for vazio.
+    Converte texto em inglês para um arquivo .mp3 usando Edge TTS.
 
-    Exemplo:
-        audio_id = text_to_speech("Good morning everyone")
-        # audio_id = "a3f2c1d4-..." (UUID)
-        # Arquivo salvo em: temp/a3f2c1d4-....mp3
+    Parâmetros:
+        text       — texto a sintetizar
+        voice      — "female" (padrão) ou "male"
+        output_dir — pasta onde salvar o .mp3 (padrão: temp/)
+
+    Retorna o audio_id (UUID) ou None em caso de falha.
     """
-    # Texto vazio não gera áudio
     if not text:
         return None
 
-    # Garante que a pasta temp existe
     os.makedirs(output_dir, exist_ok=True)
 
-    # Gera um ID único para este arquivo de áudio
     audio_id = str(uuid.uuid4())
     filepath = os.path.join(output_dir, f"{audio_id}.mp3")
 
-    # Cria o áudio em inglês e salva no disco
+    voice_name = VOICE_FEMALE if voice == "female" else VOICE_MALE
+
     try:
-        tts = gTTS(text=text, lang="en")
-        tts.save(filepath)
+        # edge-tts é assíncrono; asyncio.run() cria um event loop isolado na thread
+        asyncio.run(_synthesize(text, voice_name, filepath))
     except Exception as e:
-        # Se gTTS falhar (internet lenta, serviço fora), retorna None
-        # O servidor vai mostrar só a legenda, sem áudio neste chunk
         print(f"[TTS] Erro ao sintetizar áudio: {e}")
         return None
 
     return audio_id
+
+
+async def _synthesize(text: str, voice_name: str, filepath: str) -> None:
+    """Chama a API do Edge TTS e salva o .mp3."""
+    communicate = edge_tts.Communicate(text, voice_name)
+    await communicate.save(filepath)

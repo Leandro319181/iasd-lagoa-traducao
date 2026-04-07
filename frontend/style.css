@@ -103,12 +103,52 @@ body {
     font-style: italic;
 }
 
-/* --- Audio toggle button --- */
+/* --- Controls area --- */
 .controls {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
 }
 
+/* Voice selector */
+.voice-selector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.controls-label {
+    font-size: 0.65rem;
+    color: #444444;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.voice-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.voice-btn {
+    padding: 9px 24px;
+    border-radius: 30px;
+    border: 1px solid #333333;
+    background-color: #1a1a1a;
+    color: #666666;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.voice-btn.active {
+    background-color: #1a3f6b;
+    border-color: #2a5fa8;
+    color: #ffffff;
+}
+
+/* Audio toggle */
 .audio-btn {
     padding: 12px 32px;
     border-radius: 30px;

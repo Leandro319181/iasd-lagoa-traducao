@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI
+from fastapi.requests import Request
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,8 +27,9 @@ WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "small")
 
 # --- Estado compartilhado ---
 audio_queue: sync_queue.Queue = sync_queue.Queue()
-clients: list = []       # uma asyncio.Queue por cliente SSE conectado
-audio_files: dict = {}   # audio_id -> timestamp de criação
+clients: list = []           # uma asyncio.Queue por cliente SSE conectado
+audio_files: dict = {}       # audio_id -> timestamp de criação
+current_voice: str = "female"  # voz ativa: "female" ou "male"
 
 
 @asynccontextmanager
@@ -71,7 +73,7 @@ async def process_loop():
         if not text:
             continue
 
-        audio_id = await asyncio.to_thread(text_to_speech, text)
+        audio_id = await asyncio.to_thread(text_to_speech, text, current_voice)
         if audio_id:
             audio_files[audio_id] = time.time()
 
@@ -134,3 +136,16 @@ async def get_audio(audio_id: str):
         return JSONResponse({"error": "Arquivo de áudio não encontrado"})
 
     return FileResponse(filepath, media_type="audio/mpeg")
+
+
+@app.post("/set-voice")
+async def set_voice(request: Request):
+    """Troca a voz ativa entre 'male' e 'female'."""
+    global current_voice
+    body = await request.json()
+    gender = body.get("gender", "female")
+    if gender not in ("male", "female"):
+        return JSONResponse({"error": "Use 'male' ou 'female'"}, status_code=400)
+    current_voice = gender
+    print(f"[VOZ] Alterada para: {current_voice}")
+    return JSONResponse({"voice": current_voice})

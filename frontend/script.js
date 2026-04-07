@@ -1,20 +1,41 @@
 const transcriptEl  = document.getElementById('transcript');
 const statusEl      = document.getElementById('status');
 const audioToggleEl = document.getElementById('audio-toggle');
+const btnFemale     = document.getElementById('btn-female');
+const btnMale       = document.getElementById('btn-male');
 
 let eventSource  = null;
-let audioEnabled = true;   // áudio ligado por padrão
+let audioEnabled = true;
 
-// --- Controle de áudio ---
+// --- Controle de voz (envia ao servidor) ---
+
+function setVoice(gender) {
+    fetch('/set-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gender: gender }),
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        console.log('[VOZ] Alterada para:', data.voice);
+        btnFemale.classList.toggle('active', data.voice === 'female');
+        btnMale.classList.toggle('active',   data.voice === 'male');
+    })
+    .catch(function (err) {
+        console.error('[VOZ] Erro ao alterar voz:', err);
+    });
+}
+
+// --- Controle de áudio pessoal ---
 
 function toggleAudio() {
     audioEnabled = !audioEnabled;
     if (audioEnabled) {
-        audioToggleEl.textContent  = '🔊 Audio ON';
-        audioToggleEl.className    = 'audio-btn audio-on';
+        audioToggleEl.textContent = '🔊 Audio ON';
+        audioToggleEl.className   = 'audio-btn audio-on';
     } else {
-        audioToggleEl.textContent  = '🔇 Audio OFF';
-        audioToggleEl.className    = 'audio-btn audio-off';
+        audioToggleEl.textContent = '🔇 Audio OFF';
+        audioToggleEl.className   = 'audio-btn audio-off';
     }
 }
 
