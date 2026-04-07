@@ -1,7 +1,24 @@
-const transcriptEl = document.getElementById('transcript');
-const statusEl     = document.getElementById('status');
+const transcriptEl  = document.getElementById('transcript');
+const statusEl      = document.getElementById('status');
+const audioToggleEl = document.getElementById('audio-toggle');
 
-let eventSource = null;
+let eventSource  = null;
+let audioEnabled = true;   // áudio ligado por padrão
+
+// --- Controle de áudio ---
+
+function toggleAudio() {
+    audioEnabled = !audioEnabled;
+    if (audioEnabled) {
+        audioToggleEl.textContent  = '🔊 Audio ON';
+        audioToggleEl.className    = 'audio-btn audio-on';
+    } else {
+        audioToggleEl.textContent  = '🔇 Audio OFF';
+        audioToggleEl.className    = 'audio-btn audio-off';
+    }
+}
+
+// --- Conexão SSE ---
 
 function connect() {
     if (eventSource) {
@@ -25,16 +42,19 @@ function connect() {
             return;
         }
 
+        // Evento inicial de handshake — ignora
         if (data.status === 'connected') {
-            console.log('[SSE] Handshake de conexão recebido.');
             return;
         }
 
+        // Atualiza legenda
         if (data.text) {
             transcriptEl.textContent = data.text;
+            transcriptEl.classList.remove('waiting');
         }
 
-        if (data.audio_id) {
+        // Toca áudio se habilitado
+        if (data.audio_id && audioEnabled) {
             playAudio(data.audio_id);
         }
     };
@@ -42,20 +62,24 @@ function connect() {
     eventSource.onerror = function () {
         statusEl.textContent = '⚫ OFFLINE';
         statusEl.className   = 'status offline';
-        transcriptEl.textContent = 'Connection lost. Reconnecting...';
+        if (!transcriptEl.classList.contains('waiting')) {
+            transcriptEl.textContent = 'Connection lost. Reconnecting...';
+        }
         eventSource.close();
-        console.log('[SSE] Desconectado. Tentando reconectar em 3s...');
+        console.log('[SSE] Desconectado. Reconectando em 3s...');
         setTimeout(connect, 3000);
     };
 }
 
+// --- Reprodução de áudio ---
+
 function playAudio(audioId) {
     const audio = new Audio('/audio/' + audioId);
     audio.play().catch(function (error) {
-        // Auto-play bloqueado pelo browser na primeira vez — usuário precisa tocar na tela
+        // Browser bloqueou auto-play — avisa o usuário uma vez
         console.warn('[Audio] Auto-play bloqueado:', error.message);
-        transcriptEl.textContent += '\n\n[Tap the screen to enable audio]';
     });
 }
 
+// Inicia conexão ao carregar a página
 connect();

@@ -3,24 +3,34 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IASD Live Translation</title>
+    <title>IASD Lagoa – Live Translation</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     <div class="container">
 
         <header class="header">
-            <h1>IASD Live Translation</h1>
+            <div class="church-info">
+                <span class="church-name">IASD LAGOA</span>
+                <span class="service-label">Sabbath Service · Live Translation</span>
+            </div>
             <span id="status" class="status offline">&#9899; OFFLINE</span>
         </header>
 
         <main class="transcript-box">
-            <p id="transcript">Waiting for translation...</p>
+            <p id="transcript" class="waiting">Waiting for the service to begin...</p>
         </main>
 
-        <footer class="footer">
-            <p>Sabbath Service &mdash; Portuguese to English</p>
-        </footer>
+        <div class="controls">
+            <button id="audio-toggle" class="audio-btn audio-on" onclick="toggleAudio()">
+                🔊 Audio ON
+            </button>
+        </div>
+
+        <div class="instructions">
+            <p>&#9432; Keep this page open · Translation appears automatically</p>
+            <p>Tap <strong>Audio ON/OFF</strong> to choose how you follow</p>
+        </div>
 
     </div>
     <script src="/static/script.js"></script>

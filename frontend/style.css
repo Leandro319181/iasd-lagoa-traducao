@@ -17,30 +17,48 @@ body {
 .container {
     width: 92%;
     max-width: 680px;
-    padding: 24px 0;
+    padding: 28px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
 }
 
+/* --- Header --- */
 .header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
+    align-items: flex-start;
 }
 
-.header h1 {
-    font-size: 1rem;
-    color: #888888;
-    font-weight: normal;
-    letter-spacing: 0.05em;
+.church-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.church-name {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #ffffff;
+    letter-spacing: 0.08em;
+}
+
+.service-label {
+    font-size: 0.7rem;
+    color: #666666;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
 }
 
+/* --- Status badge --- */
 .status {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: bold;
     padding: 5px 14px;
     border-radius: 20px;
     letter-spacing: 0.08em;
+    white-space: nowrap;
+    margin-top: 2px;
 }
 
 .status.live {
@@ -56,18 +74,19 @@ body {
 
 @keyframes pulse {
     0%, 100% { opacity: 1; }
-    50%       { opacity: 0.5; }
+    50%       { opacity: 0.45; }
 }
 
+/* --- Transcript box --- */
 .transcript-box {
     background-color: #111111;
     border-radius: 16px;
     padding: 36px 28px;
-    min-height: 220px;
+    min-height: 200px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid #222222;
+    border: 1px solid #1e1e1e;
 }
 
 #transcript {
@@ -78,15 +97,58 @@ body {
     word-break: break-word;
 }
 
-.footer {
-    margin-top: 20px;
-    text-align: center;
+#transcript.waiting {
+    font-size: 1rem;
     color: #444444;
-    font-size: 0.75rem;
+    font-style: italic;
 }
 
+/* --- Audio toggle button --- */
+.controls {
+    display: flex;
+    justify-content: center;
+}
+
+.audio-btn {
+    padding: 12px 32px;
+    border-radius: 30px;
+    border: none;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.audio-btn.audio-on {
+    background-color: #1a6b1a;
+    color: #ffffff;
+}
+
+.audio-btn.audio-off {
+    background-color: #2a2a2a;
+    color: #888888;
+}
+
+/* --- Instructions --- */
+.instructions {
+    text-align: center;
+    color: #3a3a3a;
+    font-size: 0.72rem;
+    line-height: 1.8;
+}
+
+.instructions strong {
+    color: #555555;
+}
+
+/* --- Mobile --- */
 @media (max-width: 480px) {
     #transcript {
         font-size: 1.5rem;
+    }
+
+    #transcript.waiting {
+        font-size: 0.9rem;
     }
 }
