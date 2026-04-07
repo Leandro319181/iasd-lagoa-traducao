@@ -1,6 +1,6 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-openai-whisper==20231117
+openai-whisper
 edge-tts==6.1.9
 pydub==0.25.1
 # PyAudio: on Windows use: pip install pipwin && pipwin install pyaudio
