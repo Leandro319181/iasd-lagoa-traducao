@@ -36,7 +36,7 @@ def transcribe_and_translate(wav_path: str) -> str:
         )
 
     # task="translate" faz o Whisper transcrever E traduzir para inglês diretamente
-    result = _model.transcribe(wav_path, task="translate")
+    result = _model.transcribe(wav_path, task="translate", language="pt")
     text = result["text"].strip()
     if not text:
         return ""

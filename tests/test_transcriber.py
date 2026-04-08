@@ -25,7 +25,9 @@ def test_transcribe_retorna_texto_traduzido(tmp_path):
         result = transcriber.transcribe_and_translate(str(wav_file))
 
     assert result == "Hello world"
-    mock_model.transcribe.assert_called_once_with(str(wav_file), task="translate")
+    mock_model.transcribe.assert_called_once_with(
+        str(wav_file), task="translate", language="pt"
+    )
 
 
 def test_transcribe_deleta_wav_apos_processar(tmp_path):
