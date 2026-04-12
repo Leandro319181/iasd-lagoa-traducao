@@ -160,3 +160,15 @@ function applyUpdate() {
 
 setInterval(checkUpdates, 24 * 60 * 60 * 1000);
 checkUpdates();
+
+// --- QR Code ---
+function downloadQR() {
+    var a = document.createElement('a');
+    a.href = '/qr';
+    a.download = 'qr-iasd-lagoa.png';
+    a.click();
+}
+
+function printQR() {
+    window.print();
+}
