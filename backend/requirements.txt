@@ -1,7 +1,7 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 openai-whisper
-kokoro>=0.7.16
+kokoro==0.7.16
 soundfile>=0.12.1
 numpy>=1.24.0
 pydub==0.25.1
