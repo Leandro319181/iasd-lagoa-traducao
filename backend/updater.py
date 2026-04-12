@@ -8,7 +8,7 @@ _REPO_DIR = os.path.join(os.path.dirname(__file__), "..")
 # Cache do último check para não fazer git fetch em cada separador aberto
 _cache: dict = {}
 _cache_ts: float = 0.0
-_CACHE_TTL = 240  # segundos (4 minutos)
+_CACHE_TTL = 82800  # segundos (23 horas)
 
 
 def check_for_updates() -> dict:

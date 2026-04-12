@@ -158,5 +158,5 @@ function applyUpdate() {
         });
 }
 
-setInterval(checkUpdates, 5 * 60 * 1000);
+setInterval(checkUpdates, 24 * 60 * 60 * 1000);
 checkUpdates();
