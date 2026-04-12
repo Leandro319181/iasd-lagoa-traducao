@@ -1,16 +1,16 @@
 {
-  "name": "IASD Lagoa – Live Translation",
-  "short_name": "Tradução IASD",
-  "description": "Tradução ao vivo PT → EN para membros anglófonos",
+  "name": "App Tradutor IASD Lagoa",
+  "short_name": "Tradutor IASD",
+  "description": "Tradução ao vivo PT → EN para membros anglófonos da IASD Lagoa",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
-  "theme_color": "#cc0000",
+  "theme_color": "#1a3a6b",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23cc0000'/><text y='75' x='50' text-anchor='middle' font-size='60'>🎙</text></svg>",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/static/icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
       "purpose": "any maskable"
     }
   ]

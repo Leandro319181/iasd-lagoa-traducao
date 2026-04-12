@@ -1,5 +1,5 @@
-var CACHE = 'iasd-v2';
-var STATIC = ['/', '/static/style.css', '/static/script.js', '/static/manifest.json'];
+var CACHE = 'iasd-v3';
+var STATIC = ['/', '/static/style.css', '/static/script.js', '/static/manifest.json', '/static/icon.jpg'];
 
 self.addEventListener('install', function (e) {
     e.waitUntil(
