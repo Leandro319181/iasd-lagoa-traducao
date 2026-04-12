@@ -19,6 +19,7 @@ load_dotenv()
 from transcriber import load_model, transcribe_and_translate
 from tts import text_to_speech
 from audio_capture import start_capture
+import updater
 
 # --- Configurações do .env ---
 _device_str = os.getenv("AUDIO_DEVICE_INDEX")
@@ -272,3 +273,21 @@ async def control_mute_all():
         await q.put(mute_event)
     print("[CONTROLO] Todos os clientes mutados")
     return JSONResponse({"status": "muted"})
+
+
+@app.get("/update-status")
+async def update_status():
+    """Verifica se há actualizações no GitHub."""
+    result = await asyncio.to_thread(updater.check_for_updates)
+    return JSONResponse(result)
+
+
+@app.post("/control/apply-update")
+async def control_apply_update():
+    """Aplica as actualizações via git pull."""
+    result = await asyncio.to_thread(updater.apply_update)
+    if result["success"]:
+        print("[UPDATE] Actualização aplicada:", result["output"][:80])
+    else:
+        print("[UPDATE] Erro ao aplicar:", result["error"])
+    return JSONResponse(result)

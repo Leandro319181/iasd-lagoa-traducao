@@ -114,3 +114,49 @@ function muteAll() {
         .then(function () { alert('Todos os membros foram mutados.'); })
         .catch(function (err) { alert('Erro: ' + err.message); });
 }
+
+// --- Verificação de Actualizações ---
+function checkUpdates() {
+    fetch('/update-status')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            var banner = document.getElementById('update-banner');
+            if (data.has_update) {
+                var msg = data.commits_behind + ' commit(s) disponível(is)';
+                if (data.latest_message) { msg += ' · ' + data.latest_message; }
+                document.getElementById('update-message').textContent = msg;
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
+        })
+        .catch(function () { /* sem rede — ignorar silenciosamente */ });
+}
+
+function applyUpdate() {
+    var btn = document.getElementById('btn-apply-update');
+    btn.disabled = true;
+    btn.textContent = 'A actualizar...';
+    fetch('/control/apply-update', { method: 'POST' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.success) {
+                document.getElementById('update-message').textContent =
+                    '✅ Actualização aplicada! Reinicia o servidor para activar as alterações.';
+                btn.style.display = 'none';
+            } else {
+                document.getElementById('update-message').textContent =
+                    '❌ Erro: ' + data.error;
+                btn.disabled = false;
+                btn.textContent = 'Tentar novamente';
+            }
+        })
+        .catch(function (err) {
+            document.getElementById('update-message').textContent = '❌ Erro: ' + err.message;
+            btn.disabled = false;
+            btn.textContent = 'Tentar novamente';
+        });
+}
+
+setInterval(checkUpdates, 5 * 60 * 1000);
+checkUpdates();

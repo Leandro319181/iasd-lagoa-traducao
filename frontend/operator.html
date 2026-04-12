@@ -34,11 +34,25 @@
         #subtitle-list li.no-audio { color: #888; }
         #subtitle-list li.no-audio::after { content: " ⚠ sem áudio"; color: #cc4400; font-size: 0.7rem; }
         #server-status { font-size: 0.75rem; color: #555; margin-top: 4px; }
+        #update-banner { background: #3a2a00; border: 1px solid #cc8800; border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 12px; }
+        #update-banner.hidden { display: none; }
+        .update-text { flex: 1; }
+        .update-text strong { color: #ffb300; font-size: 0.9rem; }
+        .update-text p { color: #ccc; font-size: 0.75rem; margin-top: 4px; }
+        #btn-apply-update { background: #cc8800; color: #fff; border: none; border-radius: 8px; padding: 10px 16px; font-size: 0.8rem; font-weight: bold; cursor: pointer; white-space: nowrap; }
+        #btn-apply-update:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
 <body>
     <h1>⚙ Painel do Operador — IASD Lagoa</h1>
     <div id="server-status">A conectar...</div>
+    <div id="update-banner" class="hidden">
+        <div class="update-text">
+            <strong>⬆ Nova actualização disponível</strong>
+            <p id="update-message"></p>
+        </div>
+        <button id="btn-apply-update" onclick="applyUpdate()">Actualizar</button>
+    </div>
 
     <section>
         <h2>Estado</h2>

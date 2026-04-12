@@ -96,3 +96,37 @@ def test_set_voice_invalida_retorna_400(client_v2):
         headers={"Content-Type": "application/json"},
     )
     assert res.status_code == 400
+
+
+def test_update_status_retorna_json(client_v2):
+    """GET /update-status retorna JSON com campo has_update."""
+    import unittest.mock as mock
+    with mock.patch("main.updater.check_for_updates", return_value={
+        "has_update": False, "commits_behind": 0,
+        "current_version": "abc1234", "latest_message": "", "error": ""
+    }):
+        response = client_v2.get("/update-status")
+    assert response.status_code == 200
+    data = response.json()
+    assert "has_update" in data
+    assert data["has_update"] is False
+
+def test_apply_update_sucesso(client_v2):
+    """POST /control/apply-update retorna success=True quando git pull funciona."""
+    import unittest.mock as mock
+    with mock.patch("main.updater.apply_update", return_value={
+        "success": True, "output": "Already up to date.", "error": ""
+    }):
+        response = client_v2.post("/control/apply-update")
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+
+def test_apply_update_falha(client_v2):
+    """POST /control/apply-update retorna success=False quando git pull falha."""
+    import unittest.mock as mock
+    with mock.patch("main.updater.apply_update", return_value={
+        "success": False, "output": "", "error": "not a git repository"
+    }):
+        response = client_v2.post("/control/apply-update")
+    assert response.status_code == 200
+    assert response.json()["success"] is False
