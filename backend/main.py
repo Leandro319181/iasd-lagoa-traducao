@@ -33,6 +33,7 @@ audio_files: dict = {}        # audio_id -> timestamp
 current_voice: str = "female"
 is_paused: bool = False
 _capture_stop_event = None
+_restart_lock = asyncio.Lock()
 stats: dict = {
     "chunks_processed": 0,
     "last_text": "",
@@ -252,10 +253,13 @@ async def control_resume():
 @app.post("/control/restart-capture")
 async def control_restart_capture():
     global _capture_stop_event
-    if _capture_stop_event:
-        _capture_stop_event.set()
-    await asyncio.sleep(1.0)
-    _capture_stop_event = start_capture(audio_queue, AUDIO_DEVICE_INDEX)
+    async with _restart_lock:
+        if _capture_stop_event:
+            _capture_stop_event.set()
+        await asyncio.sleep(1.0)
+        _capture_stop_event = await asyncio.to_thread(
+            start_capture, audio_queue, AUDIO_DEVICE_INDEX
+        )
     print("[CONTROLO] Captura de áudio reiniciada")
     return JSONResponse({"status": "restarted"})
 

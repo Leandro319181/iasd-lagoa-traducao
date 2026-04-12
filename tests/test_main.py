@@ -10,7 +10,10 @@ def client():
          patch("main.start_capture", return_value=MagicMock()):
         import main
         main.clients.clear()
+        main.operator_clients.clear()
         main.audio_files.clear()
+        main.is_paused = False
+        main.stats.update({"chunks_processed": 0, "last_text": "", "last_error": "", "tts_failures": 0})
         with TestClient(main.app) as c:
             yield c
 
