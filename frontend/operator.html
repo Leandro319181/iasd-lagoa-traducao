@@ -34,6 +34,9 @@
         #subtitle-list li.no-audio { color: #888; }
         #subtitle-list li.no-audio::after { content: " ⚠ sem áudio"; color: #cc4400; font-size: 0.7rem; }
         #server-status { font-size: 0.75rem; color: #555; margin-top: 4px; }
+        .qr-section { text-align: center; }
+        .qr-section img { width: 180px; height: 180px; border-radius: 8px; background: #fff; padding: 8px; }
+        .qr-section p { font-size: 0.75rem; color: #666; margin-top: 8px; }
         #update-banner { background: #3a2a00; border: 1px solid #cc8800; border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 12px; }
         #update-banner.hidden { display: none; }
         .update-text { flex: 1; }
@@ -86,6 +89,12 @@
             <button id="btn-male"   class="btn-neutral" onclick="setVoice('male')">👨 Voz Masculina</button>
             <button class="btn-danger" onclick="muteAll()" style="grid-column: span 2;">🔇 Mutar Todos os Membros</button>
         </div>
+    </section>
+
+    <section class="qr-section">
+        <h2>QR Code — App dos Membros</h2>
+        <img src="/qr" alt="QR Code" />
+        <p>Aponta a câmara do telemóvel para entrar na app</p>
     </section>
 
     <section>

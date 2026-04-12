@@ -7,9 +7,9 @@ import json
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request as FastAPIRequest
 from fastapi.requests import Request
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -291,3 +291,17 @@ async def control_apply_update():
     else:
         print("[UPDATE] Erro ao aplicar:", result["error"])
     return JSONResponse(result)
+
+
+@app.get("/qr")
+async def qr_code(request: Request):
+    """Gera QR code PNG com o URL da app dos membros."""
+    import qrcode
+    import io
+    host = request.headers.get("host", "localhost:8000")
+    url = f"http://{host}"
+    img = qrcode.make(url)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return Response(content=buf.read(), media_type="image/png")
