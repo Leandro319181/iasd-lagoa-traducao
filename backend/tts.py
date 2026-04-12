@@ -1,14 +1,27 @@
 from __future__ import annotations
-import asyncio
 import os
 import uuid
 from typing import Optional
 
-import edge_tts
+import numpy as np
+import soundfile as sf
 
-# Vozes disponíveis (Microsoft Edge TTS — alta qualidade, grátis)
-VOICE_MALE   = "en-US-ChristopherNeural"
-VOICE_FEMALE = "en-US-JennyNeural"
+VOICE_FEMALE = "af_heart"
+VOICE_MALE   = "am_michael"
+SAMPLE_RATE  = 24000
+
+_pipeline = None
+
+
+def _get_pipeline():
+    """Carrega o pipeline Kokoro uma vez e reutiliza (lazy init)."""
+    global _pipeline
+    if _pipeline is None:
+        from kokoro import KPipeline
+        print("[TTS] Carregando Kokoro TTS (pode demorar na 1ª vez)...")
+        _pipeline = KPipeline(lang_code="a")  # "a" = American English
+        print("[TTS] Kokoro pronto.")
+    return _pipeline
 
 
 def text_to_speech(
@@ -17,36 +30,36 @@ def text_to_speech(
     output_dir: str = "temp",
 ) -> Optional[str]:
     """
-    Converte texto em inglês para um arquivo .mp3 usando Edge TTS.
-
-    Parâmetros:
-        text       — texto a sintetizar
-        voice      — "female" (padrão) ou "male"
-        output_dir — pasta onde salvar o .mp3 (padrão: temp/)
-
-    Retorna o audio_id (UUID) ou None em caso de falha.
+    Converte texto em inglês para .wav usando Kokoro TTS local.
+    Retorna audio_id (UUID) ou None em caso de falha.
     """
     if not text:
         return None
 
     os.makedirs(output_dir, exist_ok=True)
-
     audio_id = str(uuid.uuid4())
-    filepath = os.path.join(output_dir, f"{audio_id}.mp3")
-
+    filepath = os.path.join(output_dir, f"{audio_id}.wav")
     voice_name = VOICE_FEMALE if voice == "female" else VOICE_MALE
 
     try:
-        # edge-tts é assíncrono; asyncio.run() cria um event loop isolado na thread
-        asyncio.run(_synthesize(text, voice_name, filepath))
+        pipeline = _get_pipeline()
+        chunks = []
+        for _, _, audio in pipeline(text, voice=voice_name, speed=1.0):
+            chunks.append(audio)
+
+        if not chunks:
+            raise RuntimeError("Kokoro não gerou áudio")
+
+        audio_data = np.concatenate(chunks)
+        sf.write(filepath, audio_data, SAMPLE_RATE)
+
+        if os.path.getsize(filepath) == 0:
+            raise RuntimeError("Ficheiro WAV vazio")
+
+        return audio_id
+
     except Exception as e:
-        print(f"[TTS] Erro ao sintetizar áudio: {e}")
+        print(f"[TTS] Erro: {e}")
+        if os.path.exists(filepath):
+            os.remove(filepath)
         return None
-
-    return audio_id
-
-
-async def _synthesize(text: str, voice_name: str, filepath: str) -> None:
-    """Chama a API do Edge TTS e salva o .mp3."""
-    communicate = edge_tts.Communicate(text, voice_name)
-    await communicate.save(filepath)

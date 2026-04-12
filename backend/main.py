@@ -85,13 +85,13 @@ async def process_loop():
 
 
 async def cleanup_loop():
-    """Remove arquivos .mp3 com mais de 60 segundos."""
+    """Remove ficheiros .wav com mais de 60 segundos."""
     while True:
         await asyncio.sleep(30)
         now = time.time()
         to_delete = [aid for aid, ts in audio_files.items() if now - ts > 60]
         for audio_id in to_delete:
-            filepath = os.path.join("temp", f"{audio_id}.mp3")
+            filepath = os.path.join("temp", f"{audio_id}.wav")
             if os.path.exists(filepath):
                 os.remove(filepath)
             audio_files.pop(audio_id, None)
@@ -127,15 +127,15 @@ async def events():
 
 @app.get("/audio/{audio_id}")
 async def get_audio(audio_id: str):
-    """Serve o arquivo .mp3 gerado pelo gTTS."""
+    """Serve o ficheiro .wav gerado pelo Kokoro TTS."""
     if "/" in audio_id or "\\" in audio_id or ".." in audio_id:
         return JSONResponse({"error": "ID de áudio inválido"})
 
-    filepath = os.path.join("temp", f"{audio_id}.mp3")
+    filepath = os.path.join("temp", f"{audio_id}.wav")
     if not os.path.exists(filepath):
         return JSONResponse({"error": "Arquivo de áudio não encontrado"})
 
-    return FileResponse(filepath, media_type="audio/mpeg")
+    return FileResponse(filepath, media_type="audio/wav")
 
 
 @app.post("/set-voice")
