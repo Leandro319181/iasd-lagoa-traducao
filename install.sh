@@ -63,15 +63,29 @@ ENV_FILE="$SCRIPT_DIR/backend/.env"
 if [ ! -f "$ENV_FILE" ]; then
     echo ""
     echo "Dispositivos de áudio disponíveis:"
-    $PYTHON -c "
+    set +e
+    DEVICE_LIST=$($PYTHON -c "
 import pyaudio
 p = pyaudio.PyAudio()
+found = False
 for i in range(p.get_device_count()):
     d = p.get_device_info_by_index(i)
     if d['maxInputChannels'] > 0:
         print(f'  [{i}] {d[\"name\"]}')
+        found = True
 p.terminate()
-"
+if not found:
+    raise SystemExit(2)
+" 2>/dev/null)
+    PYAUDIO_EXIT=$?
+    set -e
+    if [ $PYAUDIO_EXIT -ne 0 ]; then
+        echo "  AVISO: Não foi possível listar dispositivos de áudio."
+        echo "  (Verifique permissões de microfone em Preferências do Sistema)"
+        echo "  Pode editar AUDIO_DEVICE_INDEX manualmente em backend/.env após a instalação."
+    else
+        echo "$DEVICE_LIST"
+    fi
     echo ""
     printf "Índice do microfone/mesa de som [0]: "
     read -r DEV_IDX
