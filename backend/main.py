@@ -294,12 +294,19 @@ async def control_apply_update():
 
 
 @app.get("/qr")
-async def qr_code(request: Request):
-    """Gera QR code PNG com o URL da app dos membros."""
+async def qr_code():
+    """Gera QR code PNG com o IP real da máquina na rede local."""
     import qrcode
     import io
-    host = request.headers.get("host", "localhost:8000")
-    url = f"http://{host}"
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        ip = "127.0.0.1"
+    url = f"http://{ip}:8000"
     img = qrcode.make(url)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
