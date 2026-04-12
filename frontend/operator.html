@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IASD – Painel do Operador</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0d0d0d; color: #e0e0e0; font-family: Arial, sans-serif; padding: 20px; }
+        h1 { font-size: 1.2rem; color: #fff; margin-bottom: 20px; letter-spacing: 0.05em; }
+        h2 { font-size: 0.75rem; color: #555; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
+        section { background: #1a1a1a; border-radius: 12px; padding: 18px; margin-bottom: 16px; border: 1px solid #2a2a2a; }
+        .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .stat { background: #111; border-radius: 8px; padding: 12px; }
+        .stat label { display: block; font-size: 0.65rem; color: #555; text-transform: uppercase; margin-bottom: 4px; }
+        .stat span { font-size: 1.4rem; font-weight: bold; color: #fff; }
+        .error-box { background: #3a0a0a; border: 1px solid #cc0000; border-radius: 8px; padding: 10px; margin-top: 12px; font-size: 0.8rem; color: #ff6666; }
+        .hidden { display: none; }
+        .btn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        button { padding: 12px; border-radius: 8px; border: none; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
+        button:active { opacity: 0.7; }
+        .btn-primary   { background: #1a4a8a; color: #fff; }
+        .btn-danger    { background: #8a1a1a; color: #fff; }
+        .btn-success   { background: #1a6b1a; color: #fff; }
+        .btn-warning   { background: #6b5a1a; color: #fff; }
+        .btn-neutral   { background: #2a2a2a; color: #aaa; }
+        .btn-paused    { background: #cc0000; color: #fff; }
+        #subtitle-list { list-style: none; }
+        #subtitle-list li { padding: 8px 0; border-bottom: 1px solid #222; font-size: 0.9rem; line-height: 1.4; }
+        #subtitle-list li:last-child { border-bottom: none; }
+        #subtitle-list .time { color: #555; font-size: 0.7rem; margin-right: 8px; }
+        #subtitle-list li.no-audio { color: #888; }
+        #subtitle-list li.no-audio::after { content: " ⚠ sem áudio"; color: #cc4400; font-size: 0.7rem; }
+        #server-status { font-size: 0.75rem; color: #555; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <h1>⚙ Painel do Operador — IASD Lagoa</h1>
+    <div id="server-status">A conectar...</div>
+
+    <section>
+        <h2>Estado</h2>
+        <div class="stat-grid">
+            <div class="stat">
+                <label>Captura de Áudio</label>
+                <span id="capture-status">—</span>
+            </div>
+            <div class="stat">
+                <label>Membros Conectados</label>
+                <span id="clients-count">—</span>
+            </div>
+            <div class="stat">
+                <label>Chunks Processados</label>
+                <span id="chunks-count">—</span>
+            </div>
+            <div class="stat">
+                <label>Falhas TTS</label>
+                <span id="tts-failures">—</span>
+            </div>
+        </div>
+        <div id="last-error" class="error-box hidden"></div>
+    </section>
+
+    <section>
+        <h2>Controles</h2>
+        <div class="btn-grid">
+            <button id="btn-pause" class="btn-primary" onclick="togglePause()">⏸ Pausar</button>
+            <button class="btn-warning" onclick="restartCapture()">🔄 Reiniciar Microfone</button>
+            <button id="btn-female" class="btn-neutral" onclick="setVoice('female')">👩 Voz Feminina</button>
+            <button id="btn-male"   class="btn-neutral" onclick="setVoice('male')">👨 Voz Masculina</button>
+            <button class="btn-danger" onclick="muteAll()" style="grid-column: span 2;">🔇 Mutar Todos os Membros</button>
+        </div>
+    </section>
+
+    <section>
+        <h2>Últimas Legendas</h2>
+        <ol id="subtitle-list">
+            <li style="color:#444; font-style:italic;">A aguardar traduções...</li>
+        </ol>
+    </section>
+
+    <script src="/static/operator.js"></script>
+</body>
+</html>
