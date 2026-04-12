@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import threading
 import uuid
 from typing import Optional
 
@@ -11,16 +12,19 @@ VOICE_MALE   = "am_michael"
 SAMPLE_RATE  = 24000
 
 _pipeline = None
+_pipeline_lock = threading.Lock()
 
 
 def _get_pipeline():
-    """Carrega o pipeline Kokoro uma vez e reutiliza (lazy init)."""
+    """Carrega o pipeline Kokoro uma vez e reutiliza (lazy init, thread-safe)."""
     global _pipeline
     if _pipeline is None:
-        from kokoro import KPipeline
-        print("[TTS] Carregando Kokoro TTS (pode demorar na 1ª vez)...")
-        _pipeline = KPipeline(lang_code="a")  # "a" = American English
-        print("[TTS] Kokoro pronto.")
+        with _pipeline_lock:
+            if _pipeline is None:
+                from kokoro import KPipeline
+                print("[TTS] Carregando Kokoro TTS (pode demorar na 1ª vez)...")
+                _pipeline = KPipeline(lang_code="a")  # "a" = American English
+                print("[TTS] Kokoro pronto.")
     return _pipeline
 
 

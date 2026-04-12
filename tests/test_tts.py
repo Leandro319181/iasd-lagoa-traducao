@@ -5,10 +5,12 @@ import os
 
 
 def test_texto_vazio_retorna_none(tmp_path):
-    """text_to_speech com texto vazio deve retornar None sem criar ficheiro."""
+    """text_to_speech com texto vazio deve retornar None sem chamar o pipeline."""
     import tts
-    result = tts.text_to_speech("", output_dir=str(tmp_path))
+    with patch.object(tts, "_get_pipeline") as mock_get:
+        result = tts.text_to_speech("", output_dir=str(tmp_path))
     assert result is None
+    mock_get.assert_not_called()
     assert list(tmp_path.glob("*.wav")) == []
 
 
