@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#cc0000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <title>IASD Lagoa – Live Translation</title>
     <link rel="stylesheet" href="/static/style.css" />
+    <link rel="manifest" href="/static/manifest.json" />
 </head>
 <body>
     <div class="container">
@@ -22,7 +27,6 @@
         </main>
 
         <div class="controls">
-            <!-- Seleção de voz (visível só para o operador) -->
             <div class="voice-selector">
                 <span class="controls-label">Speaker voice</span>
                 <div class="voice-buttons">
@@ -35,7 +39,6 @@
                 </div>
             </div>
 
-            <!-- Toggle de áudio pessoal -->
             <button id="audio-toggle" class="audio-btn audio-on" onclick="toggleAudio()">
                 🔊 Audio ON
             </button>

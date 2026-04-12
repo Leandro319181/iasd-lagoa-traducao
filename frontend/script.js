@@ -1,14 +1,89 @@
-const transcriptEl  = document.getElementById('transcript');
-const statusEl      = document.getElementById('status');
-const audioToggleEl = document.getElementById('audio-toggle');
-const btnFemale     = document.getElementById('btn-female');
-const btnMale       = document.getElementById('btn-male');
+var transcriptEl  = document.getElementById('transcript');
+var statusEl      = document.getElementById('status');
+var audioToggleEl = document.getElementById('audio-toggle');
+var btnFemale     = document.getElementById('btn-female');
+var btnMale       = document.getElementById('btn-male');
 
-let eventSource  = null;
-let audioEnabled = true;
+var eventSource  = null;
+var audioEnabled = true;
+var wakeLock     = null;
 
-// --- Controle de voz (envia ao servidor) ---
+// --- Fila de Áudio (estado: 'idle' | 'playing') ---
+var audioState = 'idle';
+var audioQueue = [];
+var audioEl    = new Audio();
 
+audioEl.addEventListener('ended', function () {
+    audioState = 'idle';
+    playNext();
+});
+
+audioEl.addEventListener('error', function () {
+    console.warn('[Audio] Erro no elemento, avançando fila');
+    audioState = 'idle';
+    playNext();
+});
+
+function playAudio(audioId) {
+    audioQueue.push(audioId);
+    if (audioState === 'idle') {
+        playNext();
+    }
+}
+
+function playNext() {
+    if (audioQueue.length === 0) { audioState = 'idle'; return; }
+    if (!audioEnabled) { audioQueue = []; audioState = 'idle'; return; }
+
+    audioState = 'playing';
+    var id = audioQueue.shift();
+    audioEl.src = '/audio/' + id;
+    audioEl.play().catch(function (err) {
+        console.warn('[Audio] play() bloqueado:', err.message);
+        // Guarda na fila — toca no próximo toque do utilizador
+        audioQueue.unshift(id);
+        audioState = 'idle';
+    });
+}
+
+// Tenta retomar fila bloqueada no primeiro toque
+document.addEventListener('touchstart', function () {
+    if (audioState === 'idle' && audioQueue.length > 0) {
+        playNext();
+    }
+}, { passive: true });
+
+// --- Wake Lock (mantém ecrã aceso) ---
+function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    navigator.wakeLock.request('screen').then(function (lock) {
+        wakeLock = lock;
+        console.log('[WakeLock] Ecrã bloqueado.');
+        lock.addEventListener('release', function () {
+            console.log('[WakeLock] Libertado — a renovar...');
+            requestWakeLock();
+        });
+    }).catch(function (err) {
+        console.warn('[WakeLock] Não disponível:', err.message);
+    });
+}
+
+document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+        requestWakeLock();
+    }
+});
+
+requestWakeLock();
+
+// Registar Service Worker (PWA)
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(function (err) {
+        console.warn('[SW] Registo falhou:', err);
+    });
+}
+
+// --- Controlo de Voz ---
 function setVoice(gender) {
     fetch('/set-voice', {
         method: 'POST',
@@ -17,17 +92,13 @@ function setVoice(gender) {
     })
     .then(function (res) { return res.json(); })
     .then(function (data) {
-        console.log('[VOZ] Alterada para:', data.voice);
         btnFemale.classList.toggle('active', data.voice === 'female');
         btnMale.classList.toggle('active',   data.voice === 'male');
     })
-    .catch(function (err) {
-        console.error('[VOZ] Erro ao alterar voz:', err);
-    });
+    .catch(function (err) { console.error('[VOZ] Erro:', err); });
 }
 
-// --- Controle de áudio pessoal ---
-
+// --- Áudio ON/OFF ---
 function toggleAudio() {
     audioEnabled = !audioEnabled;
     if (audioEnabled) {
@@ -36,45 +107,45 @@ function toggleAudio() {
     } else {
         audioToggleEl.textContent = '🔇 Audio OFF';
         audioToggleEl.className   = 'audio-btn audio-off';
+        audioQueue = [];
+        audioEl.pause();
+        audioState = 'idle';
     }
 }
 
 // --- Conexão SSE ---
-
 function connect() {
-    if (eventSource) {
-        eventSource.close();
-    }
-
+    if (eventSource) { eventSource.close(); }
     eventSource = new EventSource('/events');
 
     eventSource.onopen = function () {
         statusEl.textContent = '🔴 LIVE';
         statusEl.className   = 'status live';
-        console.log('[SSE] Conectado ao servidor.');
     };
 
     eventSource.onmessage = function (event) {
-        let data;
-        try {
-            data = JSON.parse(event.data);
-        } catch (e) {
-            console.error('[SSE] Erro ao parsear evento:', event.data);
+        var data;
+        try { data = JSON.parse(event.data); }
+        catch (e) { return; }
+
+        if (data.status === 'connected') return;
+
+        // Comando do operador: mutar todos
+        if (data.action === 'mute') {
+            audioEnabled = false;
+            audioToggleEl.textContent = '🔇 Audio OFF';
+            audioToggleEl.className   = 'audio-btn audio-off';
+            audioQueue = [];
+            audioEl.pause();
+            audioState = 'idle';
             return;
         }
 
-        // Evento inicial de handshake — ignora
-        if (data.status === 'connected') {
-            return;
-        }
-
-        // Atualiza legenda
         if (data.text) {
             transcriptEl.textContent = data.text;
             transcriptEl.classList.remove('waiting');
         }
 
-        // Toca áudio se habilitado
         if (data.audio_id && audioEnabled) {
             playAudio(data.audio_id);
         }
@@ -83,24 +154,9 @@ function connect() {
     eventSource.onerror = function () {
         statusEl.textContent = '⚫ OFFLINE';
         statusEl.className   = 'status offline';
-        if (!transcriptEl.classList.contains('waiting')) {
-            transcriptEl.textContent = 'Connection lost. Reconnecting...';
-        }
         eventSource.close();
-        console.log('[SSE] Desconectado. Reconectando em 3s...');
         setTimeout(connect, 3000);
     };
 }
 
-// --- Reprodução de áudio ---
-
-function playAudio(audioId) {
-    const audio = new Audio('/audio/' + audioId);
-    audio.play().catch(function (error) {
-        // Browser bloqueou auto-play — avisa o usuário uma vez
-        console.warn('[Audio] Auto-play bloqueado:', error.message);
-    });
-}
-
-// Inicia conexão ao carregar a página
 connect();
