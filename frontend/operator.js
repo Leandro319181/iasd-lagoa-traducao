@@ -142,7 +142,7 @@ function applyUpdate() {
         .then(function (data) {
             if (data.success) {
                 document.getElementById('update-message').textContent =
-                    '✅ Actualização aplicada! Reinicia o servidor para activar as alterações.';
+                    '✅ Pronto! Fecha o terminal do servidor e abre o start.sh de novo para activar.';
                 btn.style.display = 'none';
             } else {
                 document.getElementById('update-message').textContent =
