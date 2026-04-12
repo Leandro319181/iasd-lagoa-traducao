@@ -27,20 +27,31 @@ WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "small")
 
 # --- Estado compartilhado ---
 audio_queue: sync_queue.Queue = sync_queue.Queue()
-clients: list = []           # uma asyncio.Queue por cliente SSE conectado
-audio_files: dict = {}       # audio_id -> timestamp de criação
-current_voice: str = "female"  # voz ativa: "female" ou "male"
+clients: list = []            # asyncio.Queue por cliente SSE membro
+operator_clients: list = []   # asyncio.Queue por cliente SSE operador
+audio_files: dict = {}        # audio_id -> timestamp
+current_voice: str = "female"
+is_paused: bool = False
+_capture_stop_event = None
+stats: dict = {
+    "chunks_processed": 0,
+    "last_text": "",
+    "last_error": "",
+    "tts_failures": 0,
+}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup e shutdown do servidor."""
+    global _capture_stop_event
     print("Iniciando servidor de tradução IASD...")
     load_model(WHISPER_MODEL)
-    start_capture(audio_queue, AUDIO_DEVICE_INDEX)
+    _capture_stop_event = start_capture(audio_queue, AUDIO_DEVICE_INDEX)
     process_task = asyncio.create_task(process_loop())
     cleanup_task = asyncio.create_task(cleanup_loop())
     yield
+    if _capture_stop_event:
+        _capture_stop_event.set()
     process_task.cancel()
     cleanup_task.cancel()
 
@@ -54,15 +65,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve arquivos do frontend se a pasta existir
 _frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.isdir(_frontend_dir):
     app.mount("/static", StaticFiles(directory=_frontend_dir), name="static")
 
 
 async def process_loop():
-    """Lê chunks da fila, processa com Whisper + gTTS, notifica clientes SSE."""
+    """Lê chunks da fila, processa com Whisper + Kokoro, notifica clientes SSE."""
     while True:
+        if is_paused:
+            await asyncio.sleep(0.5)
+            continue
+
         try:
             wav_path = audio_queue.get_nowait()
         except sync_queue.Empty:
@@ -76,12 +90,28 @@ async def process_loop():
         audio_id = await asyncio.to_thread(text_to_speech, text, current_voice)
         if audio_id:
             audio_files[audio_id] = time.time()
+            stats["last_error"] = ""
+        else:
+            stats["tts_failures"] += 1
+            stats["last_error"] = f"TTS falhou: {text[:50]}"
 
-        event_data = json.dumps({"text": text, "audio_id": audio_id})
+        stats["chunks_processed"] += 1
+        stats["last_text"] = text
+
+        member_event = json.dumps({"text": text, "audio_id": audio_id})
+        operator_event = json.dumps({
+            "text": text,
+            "audio_id": audio_id,
+            "clients": len(clients),
+            "chunks": stats["chunks_processed"],
+        })
+
         print(f"[TRADUÇÃO] {text[:60]}...")
 
-        for client_queue in list(clients):
-            await client_queue.put(event_data)
+        for q in list(clients):
+            await q.put(member_event)
+        for q in list(operator_clients):
+            await q.put(operator_event)
 
 
 async def cleanup_loop():
@@ -97,18 +127,37 @@ async def cleanup_loop():
             audio_files.pop(audio_id, None)
 
 
+# --- Páginas ---
+
 @app.get("/")
 async def root():
-    """Serve a página principal do app."""
     index_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
-    return JSONResponse({"message": "Frontend não encontrado. Verifique a pasta frontend/"})
+    return JSONResponse({"message": "Frontend não encontrado."})
 
+
+@app.get("/operator")
+async def operator_page():
+    op_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "operator.html")
+    if os.path.exists(op_path):
+        return FileResponse(op_path)
+    return JSONResponse({"error": "Página do operador não encontrada."})
+
+
+@app.get("/sw.js")
+async def service_worker():
+    sw_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "sw.js")
+    if os.path.exists(sw_path):
+        return FileResponse(sw_path, media_type="application/javascript")
+    return JSONResponse({"error": "sw.js não encontrado."})
+
+
+# --- SSE ---
 
 @app.get("/events")
 async def events():
-    """SSE: envia texto traduzido + audio_id para todos os clientes conectados."""
+    """SSE para clientes membros."""
     client_queue: asyncio.Queue = asyncio.Queue()
     clients.append(client_queue)
 
@@ -125,6 +174,27 @@ async def events():
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
+@app.get("/operator-events")
+async def operator_events():
+    """SSE para o painel do operador."""
+    client_queue: asyncio.Queue = asyncio.Queue()
+    operator_clients.append(client_queue)
+
+    async def event_generator():
+        try:
+            yield 'data: {"status": "connected"}\n\n'
+            while True:
+                data = await client_queue.get()
+                yield f"data: {data}\n\n"
+        finally:
+            if client_queue in operator_clients:
+                operator_clients.remove(client_queue)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+# --- Áudio ---
+
 @app.get("/audio/{audio_id}")
 async def get_audio(audio_id: str):
     """Serve o ficheiro .wav gerado pelo Kokoro TTS."""
@@ -138,9 +208,21 @@ async def get_audio(audio_id: str):
     return FileResponse(filepath, media_type="audio/wav")
 
 
+# --- Estado e Controlo ---
+
+@app.get("/status")
+async def status():
+    """Estado actual do servidor para o painel do operador."""
+    return JSONResponse({
+        "is_paused": is_paused,
+        "clients": len(clients),
+        "voice": current_voice,
+        **stats,
+    })
+
+
 @app.post("/set-voice")
 async def set_voice(request: Request):
-    """Troca a voz ativa entre 'male' e 'female'."""
     global current_voice
     body = await request.json()
     gender = body.get("gender", "female")
@@ -149,3 +231,40 @@ async def set_voice(request: Request):
     current_voice = gender
     print(f"[VOZ] Alterada para: {current_voice}")
     return JSONResponse({"voice": current_voice})
+
+
+@app.post("/control/pause")
+async def control_pause():
+    global is_paused
+    is_paused = True
+    print("[CONTROLO] Tradução pausada")
+    return JSONResponse({"paused": True})
+
+
+@app.post("/control/resume")
+async def control_resume():
+    global is_paused
+    is_paused = False
+    print("[CONTROLO] Tradução retomada")
+    return JSONResponse({"paused": False})
+
+
+@app.post("/control/restart-capture")
+async def control_restart_capture():
+    global _capture_stop_event
+    if _capture_stop_event:
+        _capture_stop_event.set()
+    await asyncio.sleep(1.0)
+    _capture_stop_event = start_capture(audio_queue, AUDIO_DEVICE_INDEX)
+    print("[CONTROLO] Captura de áudio reiniciada")
+    return JSONResponse({"status": "restarted"})
+
+
+@app.post("/control/mute-all")
+async def control_mute_all():
+    """Envia evento de mute para todos os clientes membros."""
+    mute_event = json.dumps({"action": "mute"})
+    for q in list(clients):
+        await q.put(mute_event)
+    print("[CONTROLO] Todos os clientes mutados")
+    return JSONResponse({"status": "muted"})
