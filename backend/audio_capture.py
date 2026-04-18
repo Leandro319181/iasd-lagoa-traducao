@@ -23,15 +23,23 @@ def list_audio_devices():
     Como usar:
         python -c "from audio_capture import list_audio_devices; list_audio_devices()"
     """
+    for d in get_audio_devices_list():
+        print(f"  Índice {d['id']}: {d['name']}")
+
+
+def get_audio_devices_list():
+    """Retorna uma lista de dicionários com {id, name} das entradas de áudio."""
     p = pyaudio.PyAudio()
-    print("\nDispositivos de áudio disponíveis:")
-    print("-" * 50)
+    devices = []
     for i in range(p.get_device_count()):
         info = p.get_device_info_by_index(i)
-        if info["maxInputChannels"] > 0:  # Só mostra entradas (microfones/linhas)
-            print(f"  Índice {i}: {info['name']}")
-    print("-" * 50)
+        if info["maxInputChannels"] > 0:
+            devices.append({
+                "id": i,
+                "name": info["name"]
+            })
     p.terminate()
+    return devices
 
 
 def _get_channels(p: pyaudio.PyAudio, device_index: Optional[int]) -> int:

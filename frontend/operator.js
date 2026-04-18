@@ -27,6 +27,12 @@ function pollStatus() {
             isPaused     = data.is_paused;
             currentVoice = data.voice;
 
+            // Sincroniza o dropdown de áudio se ainda não estiver definido
+            var devSelect = document.getElementById('device-select');
+            if (devSelect && data.device_index !== undefined && !devSelect.dataset.manual) {
+                devSelect.value = data.device_index;
+            }
+
             var btnPause = document.getElementById('btn-pause');
             btnPause.textContent  = isPaused ? '▶ Retomar' : '⏸ Pausar';
             btnPause.className    = isPaused ? 'btn-paused' : 'btn-primary';
@@ -114,6 +120,47 @@ function muteAll() {
         .then(function () { alert('Todos os membros foram mutados.'); })
         .catch(function (err) { alert('Erro: ' + err.message); });
 }
+
+// --- Seleção de Microfone ---
+function loadDevices() {
+    fetch('/audio-devices')
+        .then(function (res) { return res.json(); })
+        .then(function (devices) {
+            var select = document.getElementById('device-select');
+            select.innerHTML = '';
+            devices.forEach(function (d) {
+                var opt = document.createElement('option');
+                opt.value = d.id;
+                opt.textContent = d.name;
+                select.appendChild(opt);
+            });
+            // Tenta marcar o atual a partir do primeiro poll
+            pollStatus();
+        })
+        .catch(function (err) { console.error('Erro ao carregar dispositivos:', err); });
+}
+
+function changeDevice() {
+    var select = document.getElementById('device-select');
+    var idx = select.value;
+    select.dataset.manual = "true"; // Evita que o polling sobrescreva enquanto instalamos
+
+    fetch('/control/set-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index: idx })
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (data.status === 'updated') {
+            console.log('Microfone alterado com sucesso');
+            setTimeout(function() { delete select.dataset.manual; }, 2000);
+        }
+    })
+    .catch(function (err) { alert('Erro ao mudar de microfone: ' + err.message); });
+}
+
+loadDevices();
 
 // --- Verificação de Actualizações ---
 function checkUpdates() {

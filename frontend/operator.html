@@ -53,6 +53,9 @@
         .update-text p { color: #ccc; font-size: 0.75rem; margin-top: 4px; }
         #btn-apply-update { background: #cc8800; color: #fff; border: none; border-radius: 8px; padding: 10px 16px; font-size: 0.8rem; font-weight: bold; cursor: pointer; white-space: nowrap; }
         #btn-apply-update:disabled { opacity: 0.5; cursor: not-allowed; }
+        .control-group { margin-bottom: 20px; }
+        .control-select { width: 100%; padding: 12px; background: #111; border: 1px solid #333; color: #fff; border-radius: 8px; font-size: 0.9rem; margin-top: 8px; cursor: pointer; }
+        .help-text { font-size: 0.7rem; color: #666; margin-top: 6px; }
     </style>
 </head>
 <body>
@@ -91,6 +94,14 @@
 
     <section>
         <h2>Controles</h2>
+        <div class="control-group">
+            <label style="font-size: 0.75rem; color: #555; text-transform: uppercase;">Entrada de Áudio (Microfone)</label>
+            <select id="device-select" class="control-select" onchange="changeDevice()">
+                <option value="">A carregar dispositivos...</option>
+            </select>
+            <p class="help-text">Se mudar o microfone, o sistema reinicia a captura em 1 segundo.</p>
+        </div>
+
         <div class="btn-grid">
             <button id="btn-pause" class="btn-primary" onclick="togglePause()">⏸ Pausar</button>
             <button class="btn-warning" onclick="restartCapture()">🔄 Reiniciar Microfone</button>

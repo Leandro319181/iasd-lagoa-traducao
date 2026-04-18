@@ -18,7 +18,7 @@ load_dotenv()
 
 from transcriber import load_model, transcribe_and_translate
 from tts import text_to_speech
-from audio_capture import start_capture
+from audio_capture import start_capture, get_audio_devices_list
 import updater
 
 # --- Configurações do .env ---
@@ -140,6 +140,7 @@ async def root():
 
 
 @app.get("/operator")
+@app.get("/operador")
 async def operator_page():
     op_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "operator.html")
     if os.path.exists(op_path):
@@ -210,6 +211,12 @@ async def get_audio(audio_id: str):
     return FileResponse(filepath, media_type="audio/wav")
 
 
+@app.get("/audio-devices")
+async def audio_devices():
+    """Lista todos os microfones/placas de som disponíveis."""
+    return JSONResponse(get_audio_devices_list())
+
+
 # --- Estado e Controlo ---
 
 @app.get("/status")
@@ -219,6 +226,7 @@ async def status():
         "is_paused": is_paused,
         "clients": len(clients),
         "voice": current_voice,
+        "device_index": AUDIO_DEVICE_INDEX,
         **stats,
     })
 
@@ -263,6 +271,53 @@ async def control_restart_capture():
         )
     print("[CONTROLO] Captura de áudio reiniciada")
     return JSONResponse({"status": "restarted"})
+
+
+@app.post("/control/set-device")
+async def control_set_device(request: Request):
+    """Muda o microfone em tempo real e guarda no .env."""
+    global AUDIO_DEVICE_INDEX, _capture_stop_event
+    body = await request.json()
+    new_index = body.get("index")
+
+    if new_index is None:
+        return JSONResponse({"error": "Índice não fornecido"}, status_code=400)
+
+    try:
+        new_index = int(new_index)
+    except ValueError:
+        return JSONResponse({"error": "Índice inválido"}, status_code=400)
+
+    async with _restart_lock:
+        AUDIO_DEVICE_INDEX = new_index
+        # Persistir no .env
+        env_path = os.path.join(os.path.dirname(__file__), ".env")
+        lines = []
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                lines = f.readlines()
+
+        with open(env_path, "w") as f:
+            found = False
+            for line in lines:
+                if line.startswith("AUDIO_DEVICE_INDEX="):
+                    f.write(f"AUDIO_DEVICE_INDEX={new_index}\n")
+                    found = True
+                else:
+                    f.write(line)
+            if not found:
+                f.write(f"AUDIO_DEVICE_INDEX={new_index}\n")
+
+        # Reiniciar a captura
+        if _capture_stop_event:
+            _capture_stop_event.set()
+        await asyncio.sleep(1.0)
+        _capture_stop_event = await asyncio.to_thread(
+            start_capture, audio_queue, AUDIO_DEVICE_INDEX
+        )
+
+    print(f"[CONTROLO] Dispositivo de áudio alterado para índice: {new_index}")
+    return JSONResponse({"status": "updated", "index": new_index})
 
 
 @app.post("/control/mute-all")

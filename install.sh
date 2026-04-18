@@ -44,7 +44,7 @@ echo "✓ Dependências instaladas"
 
 # 4. Descarregar modelo Kokoro (primeira vez)
 echo "A verificar modelo de voz Kokoro (~85MB, só na primeira vez)..."
-$PYTHON -c "
+"$VENV_DIR/bin/python" -c "
 from kokoro import KPipeline
 import numpy as np, soundfile as sf, tempfile, os
 p = KPipeline(lang_code='a')
