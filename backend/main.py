@@ -139,6 +139,14 @@ async def root():
     return JSONResponse({"message": "Frontend não encontrado."})
 
 
+@app.get("/setup")
+async def setup_page():
+    setup_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "setup.html")
+    if os.path.exists(setup_path):
+        return FileResponse(setup_path)
+    return JSONResponse({"error": "Página de configuração não encontrada."})
+
+
 @app.get("/operator")
 @app.get("/operador")
 async def operator_page():
@@ -367,3 +375,143 @@ async def qr_code():
     img.save(buf, format="PNG")
     buf.seek(0)
     return Response(content=buf.read(), media_type="image/png")
+
+
+@app.post("/api/test-mic")
+async def api_test_mic(request: Request):
+    """Testa um dispositivo de áudio gravando 3 segundos."""
+    body = await request.json()
+    device_index = body.get("device_index", 0)
+    try:
+        result = await asyncio.to_thread(_test_mic_sync, int(device_index))
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+def _test_mic_sync(device_index: int) -> dict:
+    import pyaudio
+    CHUNK = 1024
+    RATE = 16000
+    DURATION = 3
+    try:
+        p = pyaudio.PyAudio()
+        stream = p.open(
+            format=pyaudio.paInt16, channels=1, rate=RATE,
+            input=True, input_device_index=device_index, frames_per_buffer=CHUNK
+        )
+        frames = []
+        for _ in range(int(RATE / CHUNK * DURATION)):
+            frames.append(stream.read(CHUNK, exception_on_overflow=False))
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+        total_bytes = sum(len(f) for f in frames)
+        return {"ok": True, "message": f"{total_bytes // 1024}KB gravados em {DURATION}s"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/set-language")
+async def api_set_language(request: Request):
+    """Guarda o idioma de origem no .env para o Whisper."""
+    body = await request.json()
+    language = body.get("language", "auto")
+    allowed = {"auto", "pt", "en", "es", "fr", "de", "it", "zh", "ja", "ko", "ar"}
+    if language not in allowed:
+        return JSONResponse({"error": "Idioma inválido"}, status_code=400)
+
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            lines = f.readlines()
+
+    found = False
+    with open(env_path, "w") as f:
+        for line in lines:
+            if line.startswith("WHISPER_LANGUAGE="):
+                f.write(f"WHISPER_LANGUAGE={language}\n")
+                found = True
+            else:
+                f.write(line)
+        if not found:
+            f.write(f"WHISPER_LANGUAGE={language}\n")
+
+    return JSONResponse({"ok": True, "language": language})
+
+
+@app.get("/health")
+async def health():
+    """Endpoint de health check para lançadores e CI."""
+    return JSONResponse({"status": "ok"})
+
+
+@app.get("/api/diagnostics")
+async def diagnostics():
+    """Diagnósticos do sistema para troubleshooting."""
+    import platform
+    import shutil
+    import socket
+
+    checks = {}
+
+    # Python version
+    checks["python"] = {
+        "version": platform.python_version(),
+        "ok": tuple(int(x) for x in platform.python_version().split(".")) >= (3, 9),
+    }
+
+    # ffmpeg
+    ffmpeg_path = shutil.which("ffmpeg")
+    checks["ffmpeg"] = {"found": bool(ffmpeg_path), "path": ffmpeg_path or "não encontrado"}
+
+    # Modelo Whisper
+    try:
+        import whisper
+        model_path = whisper._download(whisper._MODELS[WHISPER_MODEL], os.path.expanduser("~/.cache/whisper"), False)
+        checks["whisper_model"] = {"ok": True, "model": WHISPER_MODEL}
+    except Exception as e:
+        checks["whisper_model"] = {"ok": False, "error": str(e)}
+
+    # Kokoro
+    try:
+        from kokoro import KPipeline
+        checks["kokoro"] = {"ok": True}
+    except Exception as e:
+        checks["kokoro"] = {"ok": False, "error": str(e)}
+
+    # Dispositivo de áudio
+    try:
+        import pyaudio
+        p = pyaudio.PyAudio()
+        devices = [
+            p.get_device_info_by_index(i)["name"]
+            for i in range(p.get_device_count())
+            if p.get_device_info_by_index(i)["maxInputChannels"] > 0
+        ]
+        p.terminate()
+        checks["audio"] = {
+            "configured_index": AUDIO_DEVICE_INDEX,
+            "available_devices": devices,
+            "ok": AUDIO_DEVICE_INDEX is None or AUDIO_DEVICE_INDEX < len(devices),
+        }
+    except Exception as e:
+        checks["audio"] = {"ok": False, "error": str(e)}
+
+    # IP da rede local
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        local_ip = "127.0.0.1"
+
+    all_ok = all(v.get("ok", True) for v in checks.values() if isinstance(v, dict))
+    return JSONResponse({
+        "status": "ok" if all_ok else "degraded",
+        "local_ip": local_ip,
+        "platform": platform.system(),
+        "checks": checks,
+    })

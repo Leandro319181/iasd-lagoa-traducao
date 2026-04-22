@@ -1,0 +1,186 @@
+name: Test Install
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'install.sh'
+      - 'install.ps1'
+      - 'backend/requirements.txt'
+  pull_request:
+    paths:
+      - 'install.sh'
+      - 'install.ps1'
+      - 'backend/requirements.txt'
+  workflow_dispatch:
+
+jobs:
+  test-mac:
+    name: Install — macOS
+    runs-on: macos-12
+    timeout-minutes: 30
+    env:
+      # Skip interactive prompts in CI
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/uv
+          key: uv-mac-${{ runner.os }}
+
+      - name: Cache Python venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-mac-${{ hashFiles('backend/requirements.txt') }}
+
+      - name: Cache Whisper model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/whisper
+          key: whisper-small-v1
+
+      - name: Cache Kokoro model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: kokoro-v0716-v1
+
+      - name: Install ffmpeg
+        run: brew install ffmpeg
+
+      - name: Run install (non-interactive)
+        run: |
+          # Pre-create .env so installer skips interactive audio selection
+          mkdir -p backend
+          echo "AUDIO_DEVICE_INDEX=0" > backend/.env
+          echo "WHISPER_MODEL=small" >> backend/.env
+          echo "PORT=8000" >> backend/.env
+          echo "CHUNK_SECONDS=5" >> backend/.env
+          # Run install with auto-start skipped (no launchctl in CI)
+          bash install.sh < /dev/null || true
+          # Verify venv was created
+          test -f .venv/bin/python
+          echo "✓ venv created"
+
+      - name: Verify dependencies installed
+        run: |
+          source .venv/bin/activate
+          python -c "import fastapi; print('fastapi:', fastapi.__version__)"
+          python -c "import whisper; print('whisper: ok')"
+          python -c "from kokoro import KPipeline; print('kokoro: ok')"
+          python -c "import uvicorn; print('uvicorn:', uvicorn.__version__)"
+
+      - name: Start server and health check
+        run: |
+          source .venv/bin/activate
+          cd backend
+          python -m uvicorn main:app --host 127.0.0.1 --port 8000 &
+          SERVER_PID=$!
+          # Wait up to 30 seconds
+          for i in {1..30}; do
+            sleep 1
+            if curl -sf http://127.0.0.1:8000/health; then
+              echo "✓ Server healthy"
+              break
+            fi
+          done
+          # Diagnostics endpoint
+          curl -sf http://127.0.0.1:8000/api/diagnostics | python3 -m json.tool
+          kill $SERVER_PID || true
+
+      - name: Verify launcher created
+        run: |
+          test -f "Iniciar Tradução.command"
+          test -x "Iniciar Tradução.command"
+          echo "✓ Launcher exists and is executable"
+
+  test-windows:
+    name: Install — Windows
+    runs-on: windows-2022
+    timeout-minutes: 40
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~\.local\bin
+          key: uv-windows-${{ runner.os }}
+
+      - name: Cache Python venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-windows-${{ hashFiles('backend/requirements.txt') }}
+
+      - name: Cache Whisper model
+        uses: actions/cache@v4
+        with:
+          path: ~\.cache\whisper
+          key: whisper-small-windows-v1
+
+      - name: Install uv
+        run: |
+          Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
+          $env:Path = "$env:USERPROFILE\.local\bin;$env:USERPROFILE\.cargo\bin;$env:Path"
+          uv --version
+        shell: pwsh
+
+      - name: Install ffmpeg via winget
+        run: |
+          winget install --id Gyan.FFmpeg -e --silent --accept-source-agreements --accept-package-agreements
+        shell: pwsh
+        continue-on-error: true
+
+      - name: Run install (non-interactive)
+        run: |
+          # Pre-create .env
+          New-Item -ItemType Directory -Force -Path backend | Out-Null
+          @"
+          AUDIO_DEVICE_INDEX=0
+          WHISPER_MODEL=small
+          PORT=8000
+          CHUNK_SECONDS=5
+          "@ | Set-Content backend\.env -Encoding UTF8
+          # Run install skipping auto-start
+          .\install.ps1 -SkipAutoStart
+        shell: pwsh
+
+      - name: Verify dependencies
+        run: |
+          .\.venv\Scripts\python.exe -c "import fastapi; print('fastapi:', fastapi.__version__)"
+          .\.venv\Scripts\python.exe -c "import whisper; print('whisper: ok')"
+          .\.venv\Scripts\python.exe -c "from kokoro import KPipeline; print('kokoro: ok')"
+        shell: pwsh
+
+      - name: Start server and health check
+        run: |
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + $env:Path
+          $proc = Start-Process -FilePath ".\.venv\Scripts\python.exe" `
+            -ArgumentList "-m uvicorn main:app --host 127.0.0.1 --port 8000" `
+            -WorkingDirectory "backend" -PassThru -NoNewWindow
+          $ready = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep 1
+            try {
+              $r = Invoke-WebRequest http://127.0.0.1:8000/health -UseBasicParsing -TimeoutSec 2
+              if ($r.StatusCode -eq 200) { $ready = $true; break }
+            } catch {}
+          }
+          if (-not $ready) { throw "Server did not start in 30 seconds" }
+          Write-Host "Server healthy"
+          Invoke-WebRequest http://127.0.0.1:8000/api/diagnostics -UseBasicParsing | Select-Object -Expand Content
+          Stop-Process -Id $proc.Id -Force
+        shell: pwsh
+
+      - name: Verify launcher created
+        run: |
+          if (-not (Test-Path "Iniciar Tradução.bat")) { throw "Launcher not found" }
+          Write-Host "✓ Launcher exists"
+        shell: pwsh

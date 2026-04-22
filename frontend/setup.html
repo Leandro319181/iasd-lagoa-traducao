@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Configuração — App Tradutor IASD Lagoa</title>
+    <link rel="icon" type="image/jpeg" href="/static/icon.jpg" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0d0d0d;
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .wizard {
+            background: #1a1a1a;
+            border-radius: 16px;
+            border: 1px solid #2a2a2a;
+            padding: 32px;
+            width: 100%;
+            max-width: 480px;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+        .logo h1 { font-size: 1.1rem; color: #fff; letter-spacing: 0.05em; }
+        .logo p { font-size: 0.75rem; color: #555; margin-top: 4px; }
+
+        .step { display: none; }
+        .step.active { display: block; }
+
+        .step-title {
+            font-size: 0.6rem;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+        }
+        .step h2 { font-size: 1rem; color: #fff; margin-bottom: 8px; }
+        .step p { font-size: 0.85rem; color: #888; line-height: 1.5; margin-bottom: 20px; }
+
+        select, .device-list {
+            width: 100%;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #e0e0e0;
+            padding: 12px;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+        .device-list { padding: 0; overflow: hidden; }
+        .device-option {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #222;
+            transition: background 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .device-option:last-child { border-bottom: none; }
+        .device-option:hover { background: #222; }
+        .device-option.selected { background: #1a3a6a; }
+        .device-option .idx { font-size: 0.7rem; color: #555; min-width: 24px; }
+        .device-option .name { font-size: 0.85rem; flex: 1; }
+
+        .test-btn {
+            width: 100%;
+            padding: 14px;
+            background: #1a4a8a;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 12px;
+            transition: opacity 0.2s;
+        }
+        .test-btn:hover { opacity: 0.85; }
+        .test-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .test-result {
+            background: #111;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.8rem;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .test-result.ok { border: 1px solid #1a6b1a; color: #4caf50; }
+        .test-result.error { border: 1px solid #8a1a1a; color: #f44336; }
+        .test-result.testing { border: 1px solid #555; color: #aaa; }
+
+        .progress-bar-wrap {
+            background: #111;
+            border-radius: 4px;
+            height: 6px;
+            margin: 8px 0 12px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #1a4a8a;
+            width: 0%;
+            transition: width 0.1s;
+            border-radius: 4px;
+        }
+
+        .nav-btns {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .btn-back {
+            flex: 1;
+            padding: 12px;
+            background: #2a2a2a;
+            color: #aaa;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        .btn-next {
+            flex: 2;
+            padding: 12px;
+            background: #1a6b1a;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-next:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .steps-indicator {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            margin-bottom: 28px;
+        }
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #333;
+            transition: background 0.2s;
+        }
+        .dot.active { background: #1a4a8a; }
+        .dot.done { background: #1a6b1a; }
+
+        .final-icon {
+            font-size: 3rem;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        .final-links { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .link-btn {
+            display: block;
+            padding: 14px;
+            border-radius: 8px;
+            text-align: center;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+        .link-btn.primary { background: #1a4a8a; color: #fff; }
+        .link-btn.secondary { background: #2a2a2a; color: #aaa; }
+        .diag-link { font-size: 0.7rem; color: #555; text-align: center; margin-top: 16px; }
+        .diag-link a { color: #555; }
+    </style>
+</head>
+<body>
+<div class="wizard">
+    <div class="logo">
+        <h1>App Tradutor IASD Lagoa</h1>
+        <p>Configuração inicial</p>
+    </div>
+
+    <div class="steps-indicator">
+        <div class="dot active" id="dot-0"></div>
+        <div class="dot" id="dot-1"></div>
+        <div class="dot" id="dot-2"></div>
+    </div>
+
+    <!-- Passo 1: Microfone -->
+    <div class="step active" id="step-0">
+        <div class="step-title">Passo 1 de 3 — Microfone</div>
+        <h2>Selecione o microfone</h2>
+        <p>Escolha o microfone ou mesa de som que capta o pregador.</p>
+        <div class="device-list" id="device-list">
+            <div class="device-option" style="color:#555; cursor:default">A carregar...</div>
+        </div>
+        <button class="test-btn" id="test-mic-btn" disabled>Testar microfone (3 segundos)</button>
+        <div class="test-result" id="test-result"></div>
+        <div class="nav-btns">
+            <button class="btn-next" id="btn-next-0" disabled>Próximo</button>
+        </div>
+    </div>
+
+    <!-- Passo 2: Idioma de origem -->
+    <div class="step" id="step-1">
+        <div class="step-title">Passo 2 de 3 — Idioma</div>
+        <h2>Idioma do pregador</h2>
+        <p>O Whisper irá transcrever o pregador neste idioma antes de traduzir para português.</p>
+        <select id="lang-select">
+            <option value="auto">Deteção automática (recomendado)</option>
+            <option value="pt">Português</option>
+            <option value="en">Inglês</option>
+            <option value="es">Espanhol</option>
+            <option value="fr">Francês</option>
+            <option value="de">Alemão</option>
+            <option value="it">Italiano</option>
+        </select>
+        <div class="nav-btns">
+            <button class="btn-back" onclick="prevStep()">Voltar</button>
+            <button class="btn-next" id="btn-next-1" onclick="nextStep()">Próximo</button>
+        </div>
+    </div>
+
+    <!-- Passo 3: Concluído -->
+    <div class="step" id="step-2">
+        <div class="step-title">Passo 3 de 3 — Pronto</div>
+        <div class="final-icon">✅</div>
+        <h2>Configuração completa!</h2>
+        <p>As definições foram guardadas. O servidor está pronto para traduzir.</p>
+        <p style="margin-top:8px; font-size:0.8rem; color:#666;">
+            Partilhe o QR Code no painel do operador com os membros para que acedam pelo telemóvel.
+        </p>
+        <div class="final-links">
+            <a class="link-btn primary" href="/operator">Abrir Painel do Operador</a>
+            <a class="link-btn secondary" href="/">Ver App dos Membros</a>
+        </div>
+        <div class="diag-link">
+            Problemas? <a href="/api/diagnostics">Ver diagnósticos</a>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentStep = 0;
+let selectedDevice = null;
+
+async function loadDevices() {
+    const list = document.getElementById('device-list');
+    try {
+        const res = await fetch('/audio-devices');
+        const data = await res.json();
+        const devices = data.devices || data;
+        list.innerHTML = '';
+        if (!devices.length) {
+            list.innerHTML = '<div class="device-option" style="color:#f44336">Nenhum microfone encontrado. Verifique permissões em Preferências do Sistema.</div>';
+            return;
+        }
+        devices.forEach(d => {
+            const idx = d.index !== undefined ? d.index : d.id;
+            const el = document.createElement('div');
+            el.className = 'device-option';
+            el.innerHTML = `<span class="idx">[${idx}]</span><span class="name">${d.name}</span>`;
+            el.addEventListener('click', () => {
+                document.querySelectorAll('.device-option').forEach(e => e.classList.remove('selected'));
+                el.classList.add('selected');
+                selectedDevice = idx;
+                document.getElementById('test-mic-btn').disabled = false;
+            });
+            list.appendChild(el);
+        });
+        // Auto-select first
+        if (devices.length > 0) {
+            list.firstChild.classList.add('selected');
+            selectedDevice = devices[0].index !== undefined ? devices[0].index : devices[0].id;
+            document.getElementById('test-mic-btn').disabled = false;
+        }
+    } catch (e) {
+        list.innerHTML = '<div class="device-option" style="color:#f44336">Erro ao carregar dispositivos: ' + e.message + '</div>';
+    }
+}
+
+document.getElementById('test-mic-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('test-mic-btn');
+    const result = document.getElementById('test-result');
+    btn.disabled = true;
+    result.style.display = 'block';
+    result.className = 'test-result testing';
+    result.textContent = 'A gravar 3 segundos...';
+
+    // Progress bar
+    const wrap = document.createElement('div');
+    wrap.className = 'progress-bar-wrap';
+    const bar = document.createElement('div');
+    bar.className = 'progress-bar';
+    wrap.appendChild(bar);
+    result.appendChild(wrap);
+
+    let pct = 0;
+    const interval = setInterval(() => {
+        pct = Math.min(pct + 2, 95);
+        bar.style.width = pct + '%';
+    }, 60);
+
+    try {
+        const res = await fetch('/api/test-mic', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_index: selectedDevice })
+        });
+        clearInterval(interval);
+        bar.style.width = '100%';
+        const data = await res.json();
+        if (data.ok) {
+            result.className = 'test-result ok';
+            result.textContent = '✓ Microfone funcionando! ' + (data.message || '');
+            document.getElementById('btn-next-0').disabled = false;
+        } else {
+            result.className = 'test-result error';
+            result.textContent = '✗ ' + (data.error || 'Falha no teste de microfone');
+        }
+    } catch (e) {
+        clearInterval(interval);
+        result.className = 'test-result error';
+        result.textContent = '✗ Erro: ' + e.message;
+    }
+    btn.disabled = false;
+});
+
+function nextStep() {
+    if (currentStep === 0) {
+        // Save device selection
+        saveDevice();
+    } else if (currentStep === 1) {
+        // Save language and finalize
+        saveLang();
+    }
+    goToStep(currentStep + 1);
+}
+
+function prevStep() {
+    goToStep(currentStep - 1);
+}
+
+function goToStep(n) {
+    document.getElementById('step-' + currentStep).classList.remove('active');
+    document.getElementById('dot-' + currentStep).classList.remove('active');
+    document.getElementById('dot-' + currentStep).classList.add('done');
+    currentStep = n;
+    document.getElementById('step-' + currentStep).classList.add('active');
+    document.getElementById('dot-' + currentStep).classList.add('active');
+    document.getElementById('dot-' + currentStep).classList.remove('done');
+}
+
+async function saveDevice() {
+    if (selectedDevice === null) return;
+    try {
+        await fetch('/control/set-device', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ index: selectedDevice })
+        });
+    } catch (e) {
+        console.error('Failed to save device:', e);
+    }
+}
+
+async function saveLang() {
+    const lang = document.getElementById('lang-select').value;
+    try {
+        await fetch('/api/set-language', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ language: lang })
+        });
+    } catch (e) {
+        console.error('Failed to save language:', e);
+    }
+}
+
+// Wire up the first step next button
+document.getElementById('btn-next-0').addEventListener('click', nextStep);
+
+loadDevices();
+</script>
+</body>
+</html>

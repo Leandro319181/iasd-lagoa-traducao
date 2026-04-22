@@ -1,6 +1,6 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-openai-whisper
+openai-whisper==20240930
 kokoro==0.7.16
 spacy>=3.7.2,<3.8.0
 soundfile>=0.12.1
