@@ -1,8 +1,6 @@
 var transcriptEl  = document.getElementById('transcript');
 var statusEl      = document.getElementById('status');
 var audioToggleEl = document.getElementById('audio-toggle');
-var btnFemale     = document.getElementById('btn-female');
-var btnMale       = document.getElementById('btn-male');
 
 var eventSource  = null;
 var audioEnabled = true;
@@ -81,21 +79,6 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(function (err) {
         console.warn('[SW] Registo falhou:', err);
     });
-}
-
-// --- Controlo de Voz ---
-function setVoice(gender) {
-    fetch('/set-voice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gender: gender }),
-    })
-    .then(function (res) { return res.json(); })
-    .then(function (data) {
-        btnFemale.classList.toggle('active', data.voice === 'female');
-        btnMale.classList.toggle('active',   data.voice === 'male');
-    })
-    .catch(function (err) { console.error('[VOZ] Erro:', err); });
 }
 
 // --- Áudio ON/OFF ---

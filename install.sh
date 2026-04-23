@@ -213,63 +213,129 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 8. Criar lançador de duplo-clique (Mac)
+# 8. Criar app macOS (.app bundle com ícone)
 # ---------------------------------------------------------------------------
-LAUNCHER_MAC="$SCRIPT_DIR/Iniciar Tradução.command"
-cat > "$LAUNCHER_MAC" << 'LAUNCHEOF'
+APP_NAME="Tradução IASD"
+APP_PATH="$SCRIPT_DIR/${APP_NAME}.app"
+APP_MACOS_DIR="$APP_PATH/Contents/MacOS"
+APP_RES_DIR="$APP_PATH/Contents/Resources"
+
+echo "A criar app macOS..."
+rm -rf "$APP_PATH"
+mkdir -p "$APP_MACOS_DIR" "$APP_RES_DIR"
+
+# Criar ícone .icns a partir da imagem existente (usa Pillow para PNGs reais)
+ICON_SRC="$SCRIPT_DIR/imagens/WhatsApp Image 2026-04-12 at 18.26.23.jpeg"
+if [ -f "$ICON_SRC" ]; then
+    ICONSET_DIR="$SCRIPT_DIR/temp/AppIcon.iconset"
+    mkdir -p "$ICONSET_DIR"
+    "$VENV_DIR/bin/python" - << PYEOF
+from PIL import Image
+img = Image.open("$ICON_SRC").convert("RGBA")
+for s in [16, 32, 128, 256, 512]:
+    img.resize((s, s), Image.LANCZOS).save("$ICONSET_DIR/icon_{s}x{s}.png".format(s=s), "PNG")
+    img.resize((s*2, s*2), Image.LANCZOS).save("$ICONSET_DIR/icon_{s}x{s}@2x.png".format(s=s), "PNG")
+PYEOF
+    iconutil -c icns "$ICONSET_DIR" -o "$APP_RES_DIR/AppIcon.icns" 2>/dev/null || true
+    rm -rf "$ICONSET_DIR"
+    echo "✓ Ícone criado"
+fi
+
+# Info.plist
+cat > "$APP_PATH/Contents/Info.plist" << 'PLISTEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Tradução IASD</string>
+    <key>CFBundleDisplayName</key>
+    <string>Tradução IASD</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.iasd-lagoa.traducao</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+    <key>CFBundleExecutable</key>
+    <string>launcher</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>LSUIElement</key>
+    <false/>
+</dict>
+</plist>
+PLISTEOF
+
+# Launcher da app (embeds project path at install time)
+cat > "$APP_MACOS_DIR/launcher" << LAUNCHEOF
 #!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG_DIR="$SCRIPT_DIR/logs"
-mkdir -p "$LOG_DIR"
+PROJ_DIR="$SCRIPT_DIR"
+LOG_DIR="\$PROJ_DIR/logs"
+mkdir -p "\$LOG_DIR"
 
-echo "================================================="
-echo "  Servidor de Tradução IASD"
-echo "================================================="
-echo ""
+notify() {
+    osascript -e "display notification \"\$2\" with title \"Tradução IASD\" subtitle \"\$1\"" 2>/dev/null || true
+}
 
-# Verificar se já está a correr
+# Se o servidor já está a correr, apenas abre o painel
 if lsof -i :8000 -sTCP:LISTEN &>/dev/null; then
-    echo "✓ Servidor já está a correr."
-    sleep 1
+    notify "Servidor" "Já está a correr — a abrir painel..."
     open http://localhost:8000/operator
     exit 0
 fi
 
-source "$SCRIPT_DIR/.venv/bin/activate"
-cd "$SCRIPT_DIR/backend"
+# Auto-update do git
+notify "A verificar atualizações..." ""
+cd "\$PROJ_DIR"
+export PATH="\$HOME/.local/bin:\$HOME/.cargo/bin:/usr/local/bin:/opt/homebrew/bin:\$PATH"
 
-echo "A iniciar servidor..."
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 \
-    >> "$LOG_DIR/app.log" 2>&1 &
-SERVER_PID=$!
-
-# Aguardar servidor ficar pronto
-OPEN_URL="http://localhost:8000/operator"
-# Abrir wizard de configuração na primeira vez
-if [ ! -f "$SCRIPT_DIR/.setup-done" ]; then
-    OPEN_URL="http://localhost:8000/setup"
+if git fetch origin main --quiet 2>/dev/null; then
+    LOCAL=\$(git rev-parse HEAD 2>/dev/null)
+    REMOTE=\$(git rev-parse origin/main 2>/dev/null)
+    if [ "\$LOCAL" != "\$REMOTE" ]; then
+        notify "Atualização encontrada" "A instalar nova versão..."
+        git pull origin main --quiet >> "\$LOG_DIR/update.log" 2>&1
+        if git diff HEAD@{1} HEAD -- backend/requirements.txt | grep -q '^+'; then
+            uv pip install --python "\$PROJ_DIR/.venv/bin/python" \
+                -r "\$PROJ_DIR/backend/requirements.txt" >> "\$LOG_DIR/update.log" 2>&1
+        fi
+        notify "Atualizado!" "Nova versão instalada"
+    fi
 fi
 
-for i in {1..15}; do
+# Iniciar servidor
+notify "A iniciar..." "O servidor está a arrancar"
+source "\$PROJ_DIR/.venv/bin/activate"
+cd "\$PROJ_DIR/backend"
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 >> "\$LOG_DIR/app.log" 2>&1 &
+
+for i in {1..20}; do
     sleep 1
     if curl -s http://localhost:8000/health &>/dev/null; then
-        echo "✓ Servidor pronto!"
-        open "$OPEN_URL"
-        touch "$SCRIPT_DIR/.setup-done" 2>/dev/null || true
-        echo ""
-        echo "Para parar o servidor: feche esta janela ou pressione Ctrl+C"
-        wait $SERVER_PID
+        OPEN_URL="http://localhost:8000/operator"
+        if [ ! -f "\$PROJ_DIR/.setup-done" ]; then
+            OPEN_URL="http://localhost:8000/setup"
+        fi
+        notify "Pronto!" "A abrir painel do operador"
+        open "\$OPEN_URL"
+        touch "\$PROJ_DIR/.setup-done" 2>/dev/null || true
         exit 0
     fi
 done
 
-echo "⚠️  Servidor demorou mais do que o esperado."
-echo "Verifique logs/app.log se houver problemas."
-open "$OPEN_URL"
-wait $SERVER_PID
+notify "Erro" "O servidor não arrancou. Veja logs/app.log"
 LAUNCHEOF
-chmod +x "$LAUNCHER_MAC"
-echo "✓ Lançador 'Iniciar Tradução.command' criado"
+chmod +x "$APP_MACOS_DIR/launcher"
+
+# Copiar app para o Desktop
+cp -r "$APP_PATH" "$HOME/Desktop/${APP_NAME}.app" 2>/dev/null || true
+
+echo "✓ App '${APP_NAME}.app' criada na pasta do projeto e no Desktop"
 
 # ---------------------------------------------------------------------------
 # 9. Gerar start.sh (compatibilidade terminal)

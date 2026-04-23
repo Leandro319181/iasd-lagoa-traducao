@@ -1,4 +1,4 @@
-var CACHE = 'iasd-v3';
+var CACHE = 'iasd-v4';
 var STATIC = ['/', '/static/style.css', '/static/script.js', '/static/manifest.json', '/static/icon.jpg'];
 
 self.addEventListener('install', function (e) {
