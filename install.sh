@@ -77,8 +77,9 @@ echo "✓ Python 3.11 pronto"
 # 4. Instalar dependências (sem -q para mostrar erros reais)
 # ---------------------------------------------------------------------------
 echo "A instalar dependências (pode demorar 5-10 min na primeira vez)..."
-"$UV" pip install --python "$VENV_DIR/bin/python" setuptools || \
-    die "Erro ao instalar setuptools."
+# Garantir setuptools/wheel via pip para evitar erros de build com openai-whisper
+"$VENV_DIR/bin/python" -m pip install --upgrade pip setuptools wheel --quiet || \
+    die "Erro ao atualizar pip/setuptools."
 "$UV" pip install --python "$VENV_DIR/bin/python" --no-build-isolation -r "$SCRIPT_DIR/backend/requirements.txt" || \
     die "Erro ao instalar dependências Python. Verifique a ligação à internet e tente novamente."
 echo "✓ Dependências instaladas"
