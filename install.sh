@@ -82,9 +82,9 @@ echo "A instalar dependências (pode demorar 5-10 min na primeira vez)..."
 # Garantir pip/setuptools via pip (uv não inclui pkg_resources necessário pelo whisper)
 "$VENV_DIR/bin/python" -m pip install --upgrade pip setuptools wheel --quiet || \
     die "Erro ao atualizar pip/setuptools."
-# Instalar openai-whisper via pip diretamente (evita bug pkg_resources com uv)
+# Instalar openai-whisper via pip com --no-build-isolation (evita bug pkg_resources)
 echo "A instalar Whisper (via pip)..."
-"$VENV_DIR/bin/python" -m pip install openai-whisper==20240930 || \
+"$VENV_DIR/bin/python" -m pip install openai-whisper==20240930 --no-build-isolation || \
     die "Erro ao instalar openai-whisper."
 # Instalar restantes dependências via uv (whisper já instalado, será ignorado)
 "$UV" pip install --python "$VENV_DIR/bin/python" -r "$SCRIPT_DIR/backend/requirements.txt" || \
