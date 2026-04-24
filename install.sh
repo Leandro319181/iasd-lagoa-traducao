@@ -84,7 +84,7 @@ echo "A instalar dependências (pode demorar 5-10 min na primeira vez)..."
     die "Erro ao atualizar pip/setuptools."
 # Instalar openai-whisper via pip diretamente (evita bug pkg_resources com uv)
 echo "A instalar Whisper (via pip)..."
-"$VENV_DIR/bin/pip" install openai-whisper==20240930 || \
+"$VENV_DIR/bin/python" -m pip install openai-whisper==20240930 || \
     die "Erro ao instalar openai-whisper."
 # Instalar restantes dependências via uv (whisper já instalado, será ignorado)
 "$UV" pip install --python "$VENV_DIR/bin/python" -r "$SCRIPT_DIR/backend/requirements.txt" || \
