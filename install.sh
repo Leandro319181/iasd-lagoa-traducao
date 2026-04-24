@@ -68,9 +68,11 @@ echo "✓ ffmpeg: $(command -v ffmpeg 2>/dev/null || echo 'não instalado — in
 VENV_DIR="$SCRIPT_DIR/.venv"
 if [ ! -d "$VENV_DIR" ]; then
     echo "A criar ambiente Python 3.11..."
-    "$UV" venv "$VENV_DIR" --python 3.11 || \
+    "$UV" venv "$VENV_DIR" --python 3.11 --seed || \
         die "Não foi possível criar o ambiente Python. Verifique ligação à internet (uv faz download do Python automaticamente)."
 fi
+# Garantir que pip está disponível no venv (uv cria venvs sem pip por omissão)
+"$VENV_DIR/bin/python" -m ensurepip --upgrade --quiet 2>/dev/null || true
 echo "✓ Python 3.11 pronto"
 
 # ---------------------------------------------------------------------------
