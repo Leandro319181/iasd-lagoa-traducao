@@ -79,10 +79,15 @@ echo "✓ Python 3.11 pronto"
 # 4. Instalar dependências (sem -q para mostrar erros reais)
 # ---------------------------------------------------------------------------
 echo "A instalar dependências (pode demorar 5-10 min na primeira vez)..."
-# Garantir setuptools/wheel via pip para evitar erros de build com openai-whisper
+# Garantir pip/setuptools via pip (uv não inclui pkg_resources necessário pelo whisper)
 "$VENV_DIR/bin/python" -m pip install --upgrade pip setuptools wheel --quiet || \
     die "Erro ao atualizar pip/setuptools."
-"$UV" pip install --python "$VENV_DIR/bin/python" --no-build-isolation -r "$SCRIPT_DIR/backend/requirements.txt" || \
+# Instalar openai-whisper via pip diretamente (evita bug pkg_resources com uv)
+echo "A instalar Whisper (via pip)..."
+"$VENV_DIR/bin/pip" install openai-whisper==20240930 || \
+    die "Erro ao instalar openai-whisper."
+# Instalar restantes dependências via uv (whisper já instalado, será ignorado)
+"$UV" pip install --python "$VENV_DIR/bin/python" -r "$SCRIPT_DIR/backend/requirements.txt" || \
     die "Erro ao instalar dependências Python. Verifique a ligação à internet e tente novamente."
 echo "✓ Dependências instaladas"
 
