@@ -16,7 +16,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from transcriber import load_model, transcribe_and_translate
+from transcriber import load_model, transcribe_audio, whisper_translate_fallback, cleanup_wav
+import translator
 from tts import text_to_speech
 from audio_capture import start_capture, get_audio_devices_list
 import updater
@@ -25,6 +26,8 @@ import updater
 _device_str = os.getenv("AUDIO_DEVICE_INDEX")
 AUDIO_DEVICE_INDEX: Optional[int] = int(_device_str) if _device_str else None
 WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "small")
+GROQ_API_KEY: Optional[str] = os.getenv("GROQ_API_KEY")
+GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # --- Estado compartilhado ---
 audio_queue: sync_queue.Queue = sync_queue.Queue()
@@ -40,6 +43,9 @@ stats: dict = {
     "last_text": "",
     "last_error": "",
     "tts_failures": 0,
+    "translator_failures": 0,
+    "translator_active": False,
+    "hallucinations_filtered": 0,
 }
 
 
@@ -48,6 +54,8 @@ async def lifespan(app: FastAPI):
     global _capture_stop_event
     print("Iniciando servidor de tradução IASD...")
     load_model(WHISPER_MODEL)
+    translator_ok = translator.init_translator(GROQ_API_KEY, GROQ_MODEL)
+    stats["translator_active"] = translator_ok
     _capture_stop_event = start_capture(audio_queue, AUDIO_DEVICE_INDEX)
     process_task = asyncio.create_task(process_loop())
     cleanup_task = asyncio.create_task(cleanup_loop())
@@ -85,7 +93,29 @@ async def process_loop():
             await asyncio.sleep(0.1)
             continue
 
-        text = await asyncio.to_thread(transcribe_and_translate, wav_path)
+        # 1. Transcreve áudio em PT (com filtros anti-alucinação)
+        pt_text = await asyncio.to_thread(transcribe_audio, wav_path)
+        if pt_text is None:
+            # Era alucinação ou silêncio — descarta o .wav e segue
+            stats["hallucinations_filtered"] += 1
+            await asyncio.to_thread(cleanup_wav, wav_path)
+            continue
+
+        # 2. Tenta traduzir PT -> EN com Groq
+        text = await asyncio.to_thread(translator.translate_pt_to_en, pt_text)
+
+        # 3. Fallback: se Groq falhou, usa Whisper como tradutor
+        if text is None:
+            stats["translator_failures"] += 1
+            print(f"[FALLBACK] Groq falhou, usando Whisper para: {pt_text[:50]}")
+            text = await asyncio.to_thread(whisper_translate_fallback, wav_path)
+            if text is None:
+                await asyncio.to_thread(cleanup_wav, wav_path)
+                continue
+
+        # 4. Limpa o .wav após processamento completo
+        await asyncio.to_thread(cleanup_wav, wav_path)
+
         if not text:
             continue
 
@@ -480,6 +510,13 @@ async def diagnostics():
         checks["kokoro"] = {"ok": True}
     except Exception as e:
         checks["kokoro"] = {"ok": False, "error": str(e)}
+
+    # Tradutor Groq
+    checks["translator"] = {
+        "ok": translator.is_available(),
+        "model": GROQ_MODEL,
+        "configured": bool(GROQ_API_KEY),
+    }
 
     # Dispositivo de áudio
     try:
