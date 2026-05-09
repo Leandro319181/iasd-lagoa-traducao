@@ -1,6 +1,8 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
+LOG_DIR="$SCRIPT_DIR/logs"
+mkdir -p "$LOG_DIR"
 
 echo ""
 echo "================================================="
@@ -45,4 +47,4 @@ echo ""
 echo "================================================="
 echo "  Servidor de Tradução IASD — A iniciar..."
 echo "================================================="
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 2>&1 | tee "$LOG_DIR/app.log"

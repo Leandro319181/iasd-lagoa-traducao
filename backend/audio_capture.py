@@ -94,6 +94,7 @@ def _capture_loop(output_queue: queue.Queue, device_index: Optional[int], stop_e
             for _ in range(int(RATE / CHUNK * RECORD_SECONDS)):
                 if stop_event.is_set():
                     break
+                print("Lendo chunk...")
                 data = stream.read(CHUNK, exception_on_overflow=False)
                 frames.append(data)
 

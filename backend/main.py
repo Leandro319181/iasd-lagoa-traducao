@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import os
+os.environ["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + os.environ.get("PATH", "")
 import time
 import queue as sync_queue
 import json
