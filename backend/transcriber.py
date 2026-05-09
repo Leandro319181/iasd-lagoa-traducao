@@ -1,13 +1,29 @@
 """
 Transcrição PT com Whisper + filtros anti-alucinação.
-Separado da tradução para permitir uso de LLM externo de qualidade.
+Suporta transcrição via Groq API (whisper-large-v3-turbo) como primária,
+e Whisper local como fallback.
 """
+from __future__ import annotations
 from typing import Optional, Tuple
 import os
-import re
 import whisper
 
 _model: Optional[object] = None
+_groq_client: Optional[object] = None
+
+# ── Prompt inicial teológico adventista ───────────────────────────────────────
+# Orienta o Whisper sobre o vocabulário esperado antes de ouvir o áudio.
+# Máximo ~224 tokens — não exceder.
+THEOLOGICAL_PROMPT_PT = (
+    "Sermão da Igreja Adventista do Sétimo Dia: Sábado, Escola Sabatina, "
+    "Espírito de Profecia, Ellen White, Irmã White, Três Mensagens Angélicas, "
+    "Juízo Investigativo, Santuário, Grande Conflito, Remanescente, Segunda Vinda, "
+    "Estado dos Mortos, Santa Ceia, Lava-pés, Dízimos e Ofertas, Ancião, Diácono, "
+    "Diaconisa, Pastor distrital, Espírito Santo, Apocalipse, Gálatas, Efésios, "
+    "Romanos, Salmos, Isaías, Daniel, Génesis, Êxodo, Hebreus, Colossenses. "
+    "Amém, Aleluia, Glória a Deus, Bênção, Graça, Salvação, Redenção, Justificação, "
+    "Santificação, Profecia, Ressurreição, Evangelho eterno."
+)
 
 # Frases que o Whisper alucina (treinado em legendas de YouTube/etc)
 HALLUCINATION_PHRASES = {
@@ -37,17 +53,43 @@ HALLUCINATION_PHRASES = {
 NO_SPEECH_THRESHOLD = 0.6
 # Limite máximo de caracteres não-latinos antes de considerar alucinação
 NON_LATIN_RATIO_THRESHOLD = 0.3
-# Mínimo de caracteres para considerar tradução válida
+# Mínimo de caracteres para considerar transcrição válida
 MIN_TEXT_LENGTH = 3
 
 
-def load_model(model_name: str = "small"):
-    """Carrega o modelo Whisper. Chamar UMA VEZ no startup."""
-    global _model
-    print(f"Carregando modelo Whisper '{model_name}'...")
-    _model = whisper.load_model(model_name)
-    print(f"Modelo '{model_name}' carregado com sucesso!")
+# ── Inicialização ──────────────────────────────────────────────────────────────
 
+def init_groq_transcriber(api_key: str) -> bool:
+    """
+    Inicializa o cliente Groq para transcrição via whisper-large-v3-turbo.
+    Deve ser chamado UMA VEZ no startup se a chave estiver disponível.
+    """
+    global _groq_client
+    try:
+        from groq import Groq
+        _groq_client = Groq(api_key=api_key)
+        print("[TRANSCRITOR] ✅ Groq Whisper inicializado (whisper-large-v3-turbo) — qualidade máxima")
+        return True
+    except ImportError:
+        print("[TRANSCRITOR] ⚠️  Pacote 'groq' não instalado. Usando Whisper local.")
+        return False
+    except Exception as e:
+        print(f"[TRANSCRITOR] ❌ Erro ao inicializar Groq Whisper: {e}")
+        return False
+
+
+def load_model(model_name: str = "medium"):
+    """
+    Carrega o modelo Whisper local. Usado como fallback se Groq não estiver disponível.
+    Recomendado: 'medium' (bom equilíbrio) ou 'large-v3' (máxima qualidade local).
+    """
+    global _model
+    print(f"[TRANSCRITOR] Carregando modelo Whisper local '{model_name}' (fallback)...")
+    _model = whisper.load_model(model_name)
+    print(f"[TRANSCRITOR] Modelo local '{model_name}' carregado com sucesso!")
+
+
+# ── Filtros anti-alucinação ────────────────────────────────────────────────────
 
 def _is_non_latin_heavy(text: str) -> bool:
     """Detecta texto majoritariamente em chinês/japonês/coreano/árabe/cirílico."""
@@ -70,7 +112,6 @@ def _is_repetitive_loop(text: str) -> bool:
     words = text.lower().split()
     if len(words) < 5:
         return False
-    # Se a mesma palavra aparece >50% das vezes, é loop
     from collections import Counter
     counts = Counter(words)
     most_common_word, count = counts.most_common(1)[0]
@@ -101,54 +142,104 @@ def _is_hallucination(text: str, no_speech_prob: float) -> Tuple[bool, str]:
         return True, f"frase alucinada conhecida: '{text[:40]}'"
 
     if _is_non_latin_heavy(text):
-        return True, f"texto não-latino (provável chinês/japonês alucinado)"
+        return True, "texto não-latino (provável chinês/japonês alucinado)"
 
     if _is_repetitive_loop(text):
-        return True, f"loop repetitivo detectado"
+        return True, "loop repetitivo detectado"
 
     return False, ""
 
 
-def transcribe_audio(wav_path: str) -> Optional[str]:
+# ── Transcrição local (fallback) ───────────────────────────────────────────────
+
+def _transcribe_local(wav_path: str, task: str = "transcribe") -> Tuple[Optional[str], float]:
     """
-    Transcreve áudio PT com Whisper. Retorna texto PT ou None se for alucinação.
-    NÃO deleta o .wav (caller decide, para permitir fallback de tradução).
+    Transcreve usando o modelo Whisper local com initial_prompt teológico.
+    Retorna (texto, no_speech_prob).
     """
     if _model is None:
         raise RuntimeError("Modelo Whisper não carregado. Chame load_model() antes.")
 
-    if not os.path.exists(wav_path):
-        return None
-
-    # Whisper retorna mais info quando pegamos result completo
     result = _model.transcribe(
         wav_path,
-        task="transcribe",
+        task=task,
         language="pt",
+        initial_prompt=THEOLOGICAL_PROMPT_PT,   # ← vocabulário teológico
         no_speech_threshold=0.6,
-        condition_on_previous_text=False,  # evita propagar alucinações entre chunks
+        condition_on_previous_text=False,        # evita propagar alucinações
     )
     text = result["text"].strip()
 
-    # Calcula no_speech_prob médio dos segmentos
     segments = result.get("segments", [])
     if segments:
         no_speech_prob = sum(s.get("no_speech_prob", 0) for s in segments) / len(segments)
     else:
         no_speech_prob = 0.0
 
+    return text, no_speech_prob
+
+
+# ── Transcrição principal ──────────────────────────────────────────────────────
+
+def transcribe_audio(wav_path: str) -> Optional[str]:
+    """
+    Transcreve áudio PT. Tenta Groq API (whisper-large-v3-turbo) primeiro;
+    fallback para Whisper local se Groq falhar ou não estiver configurado.
+    Retorna texto PT, ou None se for alucinação/silêncio.
+    NÃO deleta o .wav (caller decide, para permitir fallback de tradução).
+    """
+    if not os.path.exists(wav_path):
+        return None
+
+    # 1. ── Groq Whisper API (qualidade máxima, sem usar RAM local) ──
+    if _groq_client is not None:
+        try:
+            with open(wav_path, "rb") as audio_file:
+                transcription = _groq_client.audio.transcriptions.create(
+                    file=(os.path.basename(wav_path), audio_file, "audio/wav"),
+                    model="whisper-large-v3-turbo",
+                    language="pt",
+                    prompt=THEOLOGICAL_PROMPT_PT,   # ← vocabulário teológico
+                    response_format="text",
+                    temperature=0.0,
+                )
+            # response_format="text" devolve a string diretamente
+            text = (transcription if isinstance(transcription, str) else str(transcription)).strip()
+
+            is_halluc, reason = _is_hallucination(text, 0.0)
+            if is_halluc:
+                print(f"[ANTI-ALUCINAÇÃO/GROQ] Descartado: {reason} | texto: '{text[:60]}'")
+                return None
+
+            print(f"[TRANSCRITOR/GROQ] ✅ {text[:70]}...")
+            return text
+
+        except Exception as e:
+            print(f"[TRANSCRITOR] ⚠️  Falha Groq Whisper, usando local: {e}")
+
+    # 2. ── Fallback: Whisper local ──
+    if _model is None:
+        print("[TRANSCRITOR] ❌ Nem Groq nem modelo local disponível!")
+        return None
+
+    text, no_speech_prob = _transcribe_local(wav_path, task="transcribe")
+
     is_halluc, reason = _is_hallucination(text, no_speech_prob)
     if is_halluc:
         print(f"[ANTI-ALUCINAÇÃO] Descartado: {reason} | texto: '{text[:60]}'")
         return None
 
+    print(f"[TRANSCRITOR/LOCAL] {text[:70]}...")
     return text
 
 
+# ── Fallback de tradução via Whisper local ─────────────────────────────────────
+
 def whisper_translate_fallback(wav_path: str) -> Optional[str]:
     """
-    FALLBACK: Whisper traduz direto PT->EN. Usar só se Groq falhar.
-    Aplica os mesmos filtros anti-alucinação.
+    FALLBACK: Whisper local traduz direto PT->EN.
+    Usar só se tanto Groq Whisper como Groq Tradução falharem.
+    Aplica os mesmos filtros anti-alucinação e initial_prompt teológico.
     """
     if _model is None:
         raise RuntimeError("Modelo Whisper não carregado.")
@@ -156,20 +247,7 @@ def whisper_translate_fallback(wav_path: str) -> Optional[str]:
     if not os.path.exists(wav_path):
         return None
 
-    result = _model.transcribe(
-        wav_path,
-        task="translate",
-        language="pt",
-        no_speech_threshold=0.6,
-        condition_on_previous_text=False,
-    )
-    text = result["text"].strip()
-
-    segments = result.get("segments", [])
-    if segments:
-        no_speech_prob = sum(s.get("no_speech_prob", 0) for s in segments) / len(segments)
-    else:
-        no_speech_prob = 0.0
+    text, no_speech_prob = _transcribe_local(wav_path, task="translate")
 
     is_halluc, reason = _is_hallucination(text, no_speech_prob)
     if is_halluc:
@@ -178,6 +256,8 @@ def whisper_translate_fallback(wav_path: str) -> Optional[str]:
 
     return text
 
+
+# ── Utilitários ────────────────────────────────────────────────────────────────
 
 def cleanup_wav(wav_path: str):
     """Deleta o .wav após uso. Chamar quando terminar todo o processamento."""

@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from transcriber import load_model, transcribe_audio, whisper_translate_fallback, cleanup_wav
+from transcriber import load_model, init_groq_transcriber, transcribe_audio, whisper_translate_fallback, cleanup_wav
 import translator
 from tts import text_to_speech
 from audio_capture import start_capture, get_audio_devices_list
@@ -46,6 +46,7 @@ stats: dict = {
     "tts_failures": 0,
     "translator_failures": 0,
     "translator_active": False,
+    "groq_transcription": False,
     "hallucinations_filtered": 0,
 }
 
@@ -55,6 +56,10 @@ async def lifespan(app: FastAPI):
     global _capture_stop_event
     print("Iniciando servidor de tradução IASD...")
     load_model(WHISPER_MODEL)
+    # Inicializar Groq Whisper para transcrição de alta qualidade
+    if GROQ_API_KEY:
+        groq_transcription_ok = init_groq_transcriber(GROQ_API_KEY)
+        stats["groq_transcription"] = groq_transcription_ok
     translator_ok = translator.init_translator(GROQ_API_KEY, GROQ_MODEL)
     stats["translator_active"] = translator_ok
     _capture_stop_event = start_capture(audio_queue, AUDIO_DEVICE_INDEX)
@@ -516,6 +521,14 @@ async def diagnostics():
     checks["translator"] = {
         "ok": translator.is_available(),
         "model": GROQ_MODEL,
+        "configured": bool(GROQ_API_KEY),
+    }
+
+    # Transcritor Groq Whisper
+    from transcriber import _groq_client as _tc
+    checks["groq_transcription"] = {
+        "ok": _tc is not None,
+        "model": "whisper-large-v3-turbo",
         "configured": bool(GROQ_API_KEY),
     }
 
