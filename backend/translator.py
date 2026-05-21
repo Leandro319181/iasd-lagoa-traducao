@@ -60,9 +60,66 @@ GENERAL RELIGIOUS TERMS:
 - "Bíblia Sagrada" → "Holy Bible"
 - "Palavra de Deus" → "Word of God"
 
-BIBLE QUOTES:
+BIBLE QUOTES & BOOK NAMES:
 - When you detect a Bible verse, use natural modern English (NIV-style) phrasing.
-- Keep references in English: "John 3:16" not "João 3:16".
+- Keep references in English: e.g., "John 3:16" not "João 3:16", "Genesis 1:1" not "Gênesis 1:1".
+- Translate Bible book names accurately (PT -> EN):
+  * "Gênesis" / "Génesis" → "Genesis"
+  * "Êxodo" → "Exodus"
+  * "Levítico" → "Leviticus"
+  * "Números" → "Numbers"
+  * "Deuteronômio" → "Deuteronomy"
+  * "Josué" → "Joshua"
+  * "Juízes" → "Judges"
+  * "Rute" → "Ruth"
+  * "Samuel" → "Samuel"
+  * "Reis" → "Kings"
+  * "Crônicas" → "Chronicles"
+  * "Esdras" → "Ezra"
+  * "Neemias" → "Nehemiah"
+  * "Ester" → "Esther"
+  * "Jó" → "Job"
+  * "Salmos" → "Psalms"
+  * "Provérbios" → "Proverbs"
+  * "Eclesiastes" → "Ecclesiastes"
+  * "Cantares" / "Cântico dos Cânticos" → "Song of Solomon"
+  * "Isaías" → "Isaiah"
+  * "Jeremias" → "Jeremiah"
+  * "Lamentações" → "Lamentations"
+  * "Ezequiel" → "Ezekiel"
+  * "Daniel" → "Daniel"
+  * "Oseias" → "Hosea"
+  * "Joel" → "Joel"
+  * "Amós" → "Amos"
+  * "Obadias" → "Obadiah"
+  * "Jonas" → "Jonah"
+  * "Miqueias" → "Micah"
+  * "Naum" → "Nahum"
+  * "Habacuque" → "Habakkuk"
+  * "Sofonias" → "Zephaniah"
+  * "Ageu" → "Haggai"
+  * "Zacarias" → "Zechariah"
+  * "Malaquias" → "Malachi"
+  * "Mateus" → "Matthew"
+  * "Marcos" → "Mark"
+  * "Lucas" → "Luke"
+  * "João" → "John" (NEVER "Joao" or "Joao")
+  * "Atos" / "Atos dos Apóstolos" → "Acts"
+  * "Romanos" → "Romans"
+  * "Coríntios" → "Corinthians"
+  * "Gálatas" → "Galatians"
+  * "Efésios" → "Ephesians"
+  * "Filipenses" → "Philippians"
+  * "Colossenses" → "Colossians"
+  * "Tessalonicenses" → "Thessalonians"
+  * "Timóteo" → "Timothy"
+  * "Tito" → "Titus"
+  * "Filemom" → "Philemon"
+  * "Hebreus" → "Hebrews"
+  * "Tiago" → "James" (NEVER "Tiago" or "Thiago")
+  * "Pedro" → "Peter"
+  * "Judas" → "Jude"
+  * "Apocalipse" → "Revelation" (NEVER "Apocalypse")
 
 IDIOMS — translate by meaning, not literally:
 - "Deus está passando por aqui" → "God is moving here"

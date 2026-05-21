@@ -19,10 +19,15 @@ THEOLOGICAL_PROMPT_PT = (
     "Espírito de Profecia, Ellen White, Irmã White, Três Mensagens Angélicas, "
     "Juízo Investigativo, Santuário, Grande Conflito, Remanescente, Segunda Vinda, "
     "Estado dos Mortos, Santa Ceia, Lava-pés, Dízimos e Ofertas, Ancião, Diácono, "
-    "Diaconisa, Pastor distrital, Espírito Santo, Apocalipse, Gálatas, Efésios, "
-    "Romanos, Salmos, Isaías, Daniel, Génesis, Êxodo, Hebreus, Colossenses. "
-    "Amém, Aleluia, Glória a Deus, Bênção, Graça, Salvação, Redenção, Justificação, "
-    "Santificação, Profecia, Ressurreição, Evangelho eterno."
+    "Diaconisa, Pastor distrital, Espírito Santo. Livros da Bíblia: Gênesis, Génesis, "
+    "Êxodo, Levítico, Números, Deuteronômio, Josué, Juízes, Rute, Samuel, Reis, "
+    "Crônicas, Esdras, Neemias, Ester, Jó, Salmos, Provérbios, Eclesiastes, Cantares, "
+    "Isaías, Jeremias, Lamentações, Ezequiel, Daniel, Oseias, Joel, Amós, Obadias, "
+    "Jonas, Miqueias, Naum, Habacuque, Sofonias, Ageu, Zacarias, Malaquias, Mateus, "
+    "Marcos, Lucas, João, Atos, Romanos, Coríntios, Gálatas, Efésios, Filipenses, "
+    "Colossenses, Tessalonicenses, Timóteo, Tito, Filemom, Hebreus, Tiago, Pedro, "
+    "Judas, Apocalipse. Amém, Aleluia, Glória a Deus, Bênção, Graça, Salvação, "
+    "Redenção, Justificação, Santificação, Profecia, Ressurreição, batismo, baptismo, Evangelho eterno."
 )
 
 # Frases que o Whisper alucina (treinado em legendas de YouTube/etc)
