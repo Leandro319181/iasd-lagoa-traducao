@@ -15,6 +15,8 @@ def init_db(path: str = "logs/historico.db"):
     """Cria o arquivo e a tabela se não existirem. Chamar no startup."""
     global _db_path
     _db_path = path
+    import os as _os
+    _os.makedirs(_os.path.dirname(_db_path), exist_ok=True)
     with _lock:
         with sqlite3.connect(_db_path, timeout=5) as conn:
             conn.execute("""
