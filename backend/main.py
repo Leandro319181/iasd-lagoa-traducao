@@ -17,11 +17,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from transcriber import load_model, init_groq_transcriber, transcribe_audio, whisper_translate_fallback, cleanup_wav
+from transcriber import set_local_model_name, init_groq_transcriber, transcribe_audio, whisper_translate_fallback, cleanup_wav
 import translator
 from tts import text_to_speech
 from audio_capture import start_capture, get_audio_devices_list
 import updater
+import history
 
 # --- Configurações do .env ---
 _device_str = os.getenv("AUDIO_DEVICE_INDEX")
@@ -32,11 +33,13 @@ GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # --- Estado compartilhado ---
 audio_queue: sync_queue.Queue = sync_queue.Queue()
+tts_queue: asyncio.Queue = asyncio.Queue()
+_seq_counter = 0
 clients: list = []            # asyncio.Queue por cliente SSE membro
 operator_clients: list = []   # asyncio.Queue por cliente SSE operador
 audio_files: dict = {}        # audio_id -> timestamp
 current_voice: str = "female"
-is_paused: bool = False
+is_paused: bool = True   # inicia parado — operador clica "Iniciar" pra começar
 _capture_stop_event = None
 _restart_lock = asyncio.Lock()
 stats: dict = {
@@ -55,7 +58,8 @@ stats: dict = {
 async def lifespan(app: FastAPI):
     global _capture_stop_event
     print("Iniciando servidor de tradução IASD...")
-    load_model(WHISPER_MODEL)
+    set_local_model_name(WHISPER_MODEL)
+    history.init_db("logs/historico.db")
     # Inicializar Groq Whisper para transcrição de alta qualidade
     if GROQ_API_KEY:
         groq_transcription_ok = init_groq_transcriber(GROQ_API_KEY)
@@ -65,11 +69,13 @@ async def lifespan(app: FastAPI):
     _capture_stop_event = start_capture(audio_queue, AUDIO_DEVICE_INDEX)
     process_task = asyncio.create_task(process_loop())
     cleanup_task = asyncio.create_task(cleanup_loop())
+    tts_task = asyncio.create_task(tts_loop())
     yield
     if _capture_stop_event:
         _capture_stop_event.set()
     process_task.cancel()
     cleanup_task.cancel()
+    tts_task.cancel()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -84,6 +90,17 @@ app.add_middleware(
 _frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.isdir(_frontend_dir):
     app.mount("/static", StaticFiles(directory=_frontend_dir), name="static")
+
+
+
+def broadcast(queues, event):
+    """Envia um evento a todos os clientes sem bloquear.
+    Se a fila de um cliente está cheia (lento/morto), descarta para ELE só."""
+    for q in list(queues):
+        try:
+            q.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
 
 
 async def process_loop():
@@ -104,6 +121,7 @@ async def process_loop():
         if pt_text is None:
             # Era alucinação ou silêncio — descarta o .wav e segue
             stats["hallucinations_filtered"] += 1
+            await asyncio.to_thread(history.log_block, None, None, None, "hallucination")
             await asyncio.to_thread(cleanup_wav, wav_path)
             continue
 
@@ -116,6 +134,7 @@ async def process_loop():
             print(f"[FALLBACK] Groq falhou, usando Whisper para: {pt_text[:50]}")
             text = await asyncio.to_thread(whisper_translate_fallback, wav_path)
             if text is None:
+                await asyncio.to_thread(history.log_block, None, pt_text, None, "translation_failed")
                 await asyncio.to_thread(cleanup_wav, wav_path)
                 continue
 
@@ -125,31 +144,46 @@ async def process_loop():
         if not text:
             continue
 
-        audio_id = await asyncio.to_thread(text_to_speech, text, current_voice)
-        if audio_id:
-            audio_files[audio_id] = time.time()
-            stats["last_error"] = ""
-        else:
-            stats["tts_failures"] += 1
-            stats["last_error"] = f"TTS falhou: {text[:50]}"
+        # 5. Sequência + broadcast IMEDIATO do texto (sem esperar o TTS)
+        global _seq_counter
+        _seq_counter += 1
+        seq = _seq_counter
 
         stats["chunks_processed"] += 1
         stats["last_text"] = text
 
-        member_event = json.dumps({"text": text, "audio_id": audio_id})
+        member_event = json.dumps({"seq": seq, "text": text, "audio_id": None})
         operator_event = json.dumps({
-            "text": text,
-            "audio_id": audio_id,
-            "clients": len(clients),
-            "chunks": stats["chunks_processed"],
+            "seq": seq, "text": text, "audio_id": None,
+            "clients": len(clients), "chunks": stats["chunks_processed"],
         })
 
         print(f"[TRADUÇÃO] {text[:60]}...")
 
-        for q in list(clients):
-            await q.put(member_event)
-        for q in list(operator_clients):
-            await q.put(operator_event)
+        broadcast(clients, member_event)
+        broadcast(operator_clients, operator_event)
+        await asyncio.to_thread(history.log_block, seq, pt_text, text, "ok")
+
+        # 6. Enfileira o TTS (processado em ordem pelo tts_loop)
+        await tts_queue.put((seq, text, current_voice))
+
+
+async def tts_loop():
+    """Gera o áudio TTS fora do caminho crítico, em ordem, e avisa os clientes."""
+    while True:
+        seq, text, voice = await tts_queue.get()
+        audio_id = await asyncio.to_thread(text_to_speech, text, voice)
+        await asyncio.to_thread(history.mark_audio, seq, bool(audio_id))
+        if not audio_id:
+            stats["tts_failures"] += 1
+            stats["last_error"] = f"TTS falhou: {text[:50]}"
+            continue
+        audio_files[audio_id] = time.time()
+        stats["last_error"] = ""
+
+        audio_event = json.dumps({"seq": seq, "audio_id": audio_id})
+        broadcast(clients, audio_event)
+        broadcast(operator_clients, audio_event)
 
 
 async def cleanup_loop():
@@ -205,15 +239,18 @@ async def service_worker():
 @app.get("/events")
 async def events():
     """SSE para clientes membros."""
-    client_queue: asyncio.Queue = asyncio.Queue()
+    client_queue: asyncio.Queue = asyncio.Queue(maxsize=10)
     clients.append(client_queue)
 
     async def event_generator():
         try:
             yield 'data: {"status": "connected"}\n\n'
             while True:
-                data = await client_queue.get()
-                yield f"data: {data}\n\n"
+                try:
+                    data = await asyncio.wait_for(client_queue.get(), timeout=20)
+                    yield f"data: {data}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"   # SSE comment, mantém a conexão viva
         finally:
             if client_queue in clients:
                 clients.remove(client_queue)
@@ -224,15 +261,18 @@ async def events():
 @app.get("/operator-events")
 async def operator_events():
     """SSE para o painel do operador."""
-    client_queue: asyncio.Queue = asyncio.Queue()
+    client_queue: asyncio.Queue = asyncio.Queue(maxsize=10)
     operator_clients.append(client_queue)
 
     async def event_generator():
         try:
             yield 'data: {"status": "connected"}\n\n'
             while True:
-                data = await client_queue.get()
-                yield f"data: {data}\n\n"
+                try:
+                    data = await asyncio.wait_for(client_queue.get(), timeout=20)
+                    yield f"data: {data}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"   # SSE comment, mantém a conexão viva
         finally:
             if client_queue in operator_clients:
                 operator_clients.remove(client_queue)
@@ -299,8 +339,28 @@ async def control_pause():
 async def control_resume():
     global is_paused
     is_paused = False
-    print("[CONTROLO] Tradução retomada")
+    # Esvaziar áudio acumulado durante a pausa
+    while not audio_queue.empty():
+        try:
+            audio_queue.get_nowait()
+        except Exception:
+            break
+    print("[CONTROLO] Tradução retomada — fila de áudio limpa")
     return JSONResponse({"paused": False})
+
+
+@app.post("/control/flush-queue")
+async def control_flush_queue():
+    """Esvazia a fila de áudio acumulado (usar antes de retomar)."""
+    flushed = 0
+    while not audio_queue.empty():
+        try:
+            audio_queue.get_nowait()
+            flushed += 1
+        except Exception:
+            break
+    print(f"[CONTROLO] Fila esvaziada: {flushed} chunks descartados")
+    return JSONResponse({"flushed": flushed})
 
 
 @app.post("/control/restart-capture")
@@ -368,10 +428,26 @@ async def control_set_device(request: Request):
 async def control_mute_all():
     """Envia evento de mute para todos os clientes membros."""
     mute_event = json.dumps({"action": "mute"})
-    for q in list(clients):
-        await q.put(mute_event)
+    broadcast(clients, mute_event)
     print("[CONTROLO] Todos os clientes mutados")
     return JSONResponse({"status": "muted"})
+
+
+@app.post("/feedback")
+async def member_feedback(request: Request):
+    """Recebe feedback de texto de um membro e envia ao operador via SSE."""
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        return JSONResponse({"error": "Texto vazio"}, status_code=400)
+    if len(text) > 200:
+        text = text[:200]
+    import time as _time
+    timestamp = _time.strftime("%H:%M")
+    event = json.dumps({"feedback": text, "timestamp": timestamp})
+    broadcast(operator_clients, event)
+    print(f"[FEEDBACK] {timestamp} — {text[:60]}")
+    return JSONResponse({"status": "sent"})
 
 
 @app.get("/update-status")

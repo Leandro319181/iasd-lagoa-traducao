@@ -7,9 +7,12 @@ from __future__ import annotations
 from typing import Optional, Tuple
 import os
 import whisper
+import threading
 
 _model: Optional[object] = None
 _groq_client: Optional[object] = None
+_model_lock = threading.Lock()
+_model_name: str = "small"   # sobrescrito por set_local_model_name() no startup
 
 # ── Prompt inicial teológico adventista ───────────────────────────────────────
 # Orienta o Whisper sobre o vocabulário esperado antes de ouvir o áudio.
@@ -27,7 +30,9 @@ THEOLOGICAL_PROMPT_PT = (
     "Marcos, Lucas, João, Atos, Romanos, Coríntios, Gálatas, Efésios, Filipenses, "
     "Colossenses, Tessalonicenses, Timóteo, Tito, Filemom, Hebreus, Tiago, Pedro, "
     "Judas, Apocalipse. Amém, Aleluia, Glória a Deus, Bênção, Graça, Salvação, "
-    "Redenção, Justificação, Santificação, Profecia, Ressurreição, batismo, baptismo, Evangelho eterno."
+    "Redenção, Justificação, Santificação, Profecia, Ressurreição, batismo, baptismo, Evangelho eterno. Caminho a Cristo, Patriarcas e Profetas, Profetas e Reis, "
+    "Desejado de Todas as Nações, Atos dos Apóstolos, Testemunhos para a Igreja, "
+    "lei de Deus, sábado bíblico, saúde e temperança, profecia dos 2300 dias."
 )
 
 # Frases que o Whisper alucina (treinado em legendas de YouTube/etc)
@@ -92,6 +97,28 @@ def load_model(model_name: str = "medium"):
     print(f"[TRANSCRITOR] Carregando modelo Whisper local '{model_name}' (fallback)...")
     _model = whisper.load_model(model_name)
     print(f"[TRANSCRITOR] Modelo local '{model_name}' carregado com sucesso!")
+
+
+def set_local_model_name(model_name: str):
+    """Define o tamanho do Whisper local para o lazy-load. NÃO carrega ainda."""
+    global _model_name
+    _model_name = model_name
+    print(f"[TRANSCRITOR] Whisper local configurado como '{model_name}' (lazy).")
+
+
+def _ensure_model():
+    """Carrega o Whisper local sob demanda, thread-safe. Reusa se já carregado.
+    Retorna o modelo, ou None se o carregamento falhar."""
+    global _model
+    if _model is None:
+        with _model_lock:
+            if _model is None:
+                try:
+                    load_model(_model_name)
+                except Exception as e:
+                    print(f"[TRANSCRITOR] ❌ Falha ao carregar Whisper local: {e}")
+                    return None
+    return _model
 
 
 # ── Filtros anti-alucinação ────────────────────────────────────────────────────
@@ -223,7 +250,7 @@ def transcribe_audio(wav_path: str) -> Optional[str]:
             print(f"[TRANSCRITOR] ⚠️  Falha Groq Whisper, usando local: {e}")
 
     # 2. ── Fallback: Whisper local ──
-    if _model is None:
+    if _ensure_model() is None:
         print("[TRANSCRITOR] ❌ Nem Groq nem modelo local disponível!")
         return None
 
@@ -246,7 +273,7 @@ def whisper_translate_fallback(wav_path: str) -> Optional[str]:
     Usar só se tanto Groq Whisper como Groq Tradução falharem.
     Aplica os mesmos filtros anti-alucinação e initial_prompt teológico.
     """
-    if _model is None:
+    if _ensure_model() is None:
         raise RuntimeError("Modelo Whisper não carregado.")
 
     if not os.path.exists(wav_path):

@@ -1,4 +1,4 @@
-var isPaused    = false;
+var isPaused    = true;
 var currentVoice = 'female';
 var MAX_SUBTITLES = 10;
 
@@ -25,6 +25,14 @@ function pollStatus() {
             }
 
             isPaused     = data.is_paused;
+            var btn = document.getElementById('btn-pause');
+            if (isPaused) {
+                btn.textContent = '▶ Iniciar Tradução';
+                btn.className   = 'btn-success';
+            } else {
+                btn.textContent = '⏸ Pausar Tradução';
+                btn.className   = 'btn-primary';
+            }
             currentVoice = data.voice;
 
             // Sincroniza o dropdown de áudio se ainda não estiver definido
@@ -32,10 +40,6 @@ function pollStatus() {
             if (devSelect && data.device_index !== undefined && !devSelect.dataset.manual) {
                 devSelect.value = data.device_index;
             }
-
-            var btnPause = document.getElementById('btn-pause');
-            btnPause.textContent  = isPaused ? '▶ Retomar' : '⏸ Pausar';
-            btnPause.className    = isPaused ? 'btn-paused' : 'btn-primary';
 
             document.getElementById('btn-female').className =
                 data.voice === 'female' ? 'btn-success' : 'btn-neutral';
@@ -52,47 +56,89 @@ setInterval(pollStatus, 2000);
 pollStatus();
 
 // --- SSE para legendas em tempo real ---
-var evtSource = new EventSource('/operator-events');
+var evtSource = null;
+function connect() {
+    if (evtSource) { evtSource.close(); }
+    evtSource = new EventSource('/operator-events');
 
-evtSource.onmessage = function (event) {
-    var data;
-    try { data = JSON.parse(event.data); }
-    catch (e) { return; }
-
-    if (data.status === 'connected') {
+    evtSource.onopen = function () {
         serverStatus.textContent = 'SSE conectado';
-        return;
-    }
+    };
 
-    if (!data.text) return;
+    evtSource.onmessage = function (event) {
+        var data;
+        try { data = JSON.parse(event.data); }
+        catch (e) { return; }
 
-    // Remove placeholder inicial
-    var placeholder = subtitleList.querySelector('li[style]');
-    if (placeholder) { subtitleList.removeChild(placeholder); }
+        if (data.status === 'connected') return;
 
-    var li   = document.createElement('li');
-    var now  = new Date();
-    var time = now.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    li.innerHTML = '<span class="time">' + time + '</span> ' + data.text;
+        // Evento de áudio pronto: marca o item correspondente como tendo áudio
+        if (data.audio_id && data.seq && !data.text) {
+            var target = subtitleList.querySelector('li[data-seq="' + data.seq + '"]');
+            if (target) { target.classList.remove('no-audio'); }
+            return;
+        }
 
-    if (!data.audio_id) { li.classList.add('no-audio'); }
+        // Feedback de membro
+        if (data.feedback) {
+            var feedbackList = document.getElementById('feedback-list');
+            var placeholder = feedbackList.querySelector('li[style]');
+            if (placeholder) { feedbackList.removeChild(placeholder); }
+            var li = document.createElement('li');
+            li.style.cssText = 'padding:0.4rem 0;border-bottom:1px solid #eee;';
+            li.innerHTML = '<span style="color:#999;font-size:0.75rem;">' 
+                + data.timestamp + '</span> '
+                + '<span style="color:#dc3545;font-weight:bold;">⚠ </span>'
+                + escapeHtml(data.feedback);
+            feedbackList.insertBefore(li, feedbackList.firstChild);
+            while (feedbackList.children.length > 10) {
+                feedbackList.removeChild(feedbackList.lastChild);
+            }
+            return;
+        }
 
-    subtitleList.insertBefore(li, subtitleList.firstChild);
-    while (subtitleList.children.length > MAX_SUBTITLES) {
-        subtitleList.removeChild(subtitleList.lastChild);
-    }
-};
+        if (!data.text) return;
 
-evtSource.onerror = function () {
-    serverStatus.textContent = '⚫ SSE desconectado — a reconectar...';
-};
+        // Remove placeholder inicial
+        var placeholder = subtitleList.querySelector('li[style]');
+        if (placeholder) { subtitleList.removeChild(placeholder); }
+
+        var li   = document.createElement('li');
+        li.dataset.seq = data.seq;
+        var now  = new Date();
+        var time = now.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        li.innerHTML = '<span class="time">' + time + '</span> ' + data.text;
+
+        if (!data.audio_id) { li.classList.add('no-audio'); }
+
+        subtitleList.insertBefore(li, subtitleList.firstChild);
+        while (subtitleList.children.length > MAX_SUBTITLES) {
+            subtitleList.removeChild(subtitleList.lastChild);
+        }
+    };
+
+    evtSource.onerror = function () {
+        serverStatus.textContent = '⚫ SSE desconectado — a reconectar...';
+        evtSource.close();
+        setTimeout(connect, 3000);
+    };
+}
+connect();
 
 // --- Ações dos Controles ---
 function togglePause() {
-    var endpoint = isPaused ? '/control/resume' : '/control/pause';
-    fetch(endpoint, { method: 'POST' })
-        .then(function () { pollStatus(); })
-        .catch(function (err) { alert('Erro: ' + err.message); });
+    var btn = document.getElementById('btn-pause');
+    if (isPaused) {
+        // Retomar: flush + resume
+        fetch('/control/resume', { method: 'POST' })
+            .then(function() { pollStatus(); })
+            .catch(function(err) { alert('Erro: ' + err.message); });
+    } else {
+        // Pausar
+        fetch('/control/pause', { method: 'POST' })
+            .then(function() { pollStatus(); })
+            .catch(function(err) { alert('Erro: ' + err.message); });
+    }
 }
 
 function restartCapture() {
@@ -218,4 +264,10 @@ function downloadQR() {
 
 function printQR() {
     window.print();
+}
+
+function escapeHtml(text) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(text));
+    return d.innerHTML;
 }

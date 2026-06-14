@@ -103,12 +103,21 @@
         </div>
 
         <div class="btn-grid">
-            <button id="btn-pause" class="btn-primary" onclick="togglePause()">⏸ Pausar</button>
+            <button id="btn-pause" class="btn-success" onclick="togglePause()">▶ Iniciar Tradução</button>
             <button class="btn-warning" onclick="restartCapture()">🔄 Reiniciar Microfone</button>
             <button id="btn-female" class="btn-neutral" onclick="setVoice('female')">👩 Voz Feminina</button>
             <button id="btn-male"   class="btn-neutral" onclick="setVoice('male')">👨 Voz Masculina</button>
             <button class="btn-danger" onclick="muteAll()" style="grid-column: span 2;">🔇 Mutar Todos os Membros</button>
         </div>
+    </section>
+
+    <section id="feedback-section">
+        <h2>&#128172; Alertas dos Membros</h2>
+        <ul id="feedback-list">
+            <li style="color:#999;font-size:0.85rem;">
+                Nenhuma mensagem recebida.
+            </li>
+        </ul>
     </section>
 
     <section class="qr-section">

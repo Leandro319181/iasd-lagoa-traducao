@@ -143,3 +143,37 @@ function connect() {
 }
 
 connect();
+
+
+function sendFeedback() {
+    var text = document.getElementById('feedback-text').value.trim();
+    var statusEl = document.getElementById('feedback-status');
+    var btn = document.getElementById('feedback-btn');
+    if (!text) {
+        statusEl.textContent = 'Please write a message first.';
+        statusEl.style.color = '#dc3545';
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    fetch('/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function() {
+        document.getElementById('feedback-text').value = '';
+        statusEl.textContent = '✓ Message sent to operator.';
+        statusEl.style.color = '#28a745';
+        btn.disabled = false;
+        btn.textContent = 'Send Message';
+        setTimeout(function() { statusEl.textContent = ''; }, 4000);
+    })
+    .catch(function() {
+        statusEl.textContent = 'Error sending. Try again.';
+        statusEl.style.color = '#dc3545';
+        btn.disabled = false;
+        btn.textContent = 'Send Message';
+    });
+}
