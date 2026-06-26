@@ -72,6 +72,11 @@ function connect() {
 
         if (data.status === 'connected') return;
 
+        if (data.action === 'reload') {
+            location.reload(true);
+            return;
+        }
+
         // Evento de áudio pronto: marca o item correspondente como tendo áudio
         if (data.audio_id && data.seq && !data.text) {
             var target = subtitleList.querySelector('li[data-seq="' + data.seq + '"]');

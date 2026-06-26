@@ -113,6 +113,11 @@ function connect() {
 
         if (data.status === 'connected') return;
 
+        if (data.action === 'reload') {
+            location.reload(true);
+            return;
+        }
+
         // Comando do operador: mutar todos
         if (data.action === 'mute') {
             audioEnabled = false;

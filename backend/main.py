@@ -459,10 +459,15 @@ async def update_status():
 
 @app.post("/control/apply-update")
 async def control_apply_update():
-    """Aplica as actualizações via git pull."""
+    """Aplica as actualizações via git pull e manda recarregar os clientes."""
     result = await asyncio.to_thread(updater.apply_update)
     if result["success"]:
         print("[UPDATE] Actualização aplicada:", result["output"][:80])
+        # Avisar todas as páginas (membros + operador) para recarregar
+        reload_event = json.dumps({"action": "reload"})
+        broadcast(clients, reload_event)
+        broadcast(operator_clients, reload_event)
+        print("[UPDATE] Sinal de reload enviado aos clientes.")
     else:
         print("[UPDATE] Erro ao aplicar:", result["error"])
     return JSONResponse(result)
