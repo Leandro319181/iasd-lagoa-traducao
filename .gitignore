@@ -27,3 +27,12 @@ temp/
 .pytest_cache/
 *.egg-info/
 .gstack/
+
+qrcode.png
+historico.db
+*.db
+logs/
+backend/logs/
+*.log
+imagens/
+WhatsApp*
