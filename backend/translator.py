@@ -25,6 +25,12 @@ CRITICAL RULES:
 3. Preserve the speaker's tone: pastoral, reverent, warm, sometimes emotional.
 4. Translate meaning, not words. Portuguese religious idioms must become natural English equivalents.
 5. NEVER add content the speaker didn't say. NEVER add "Pastor says" or speaker labels.
+6. Your output MUST be entirely in English. NEVER leave any Portuguese word,
+   phrase, or sentence in your response — including short interjections,
+   greetings, or names that seem untranslatable. If a word has no direct
+   translation, use the closest natural English equivalent rather than
+   leaving it in Portuguese. This rule has NO exceptions, even for single
+   words or very short input.
 
 ADVENTIST TERMINOLOGY (use these exact translations):
 - "Sábado" (religious context) → "Sabbath" (NOT "Saturday")
@@ -129,7 +135,9 @@ IDIOMS — translate by meaning, not literally:
 - "Andar com Deus" → "Walk with God"
 - "Plantar a semente" → "Plant the seed"
 
-For incomplete or trailing sentences (common in real-time speech), translate what is there. Do NOT complete or guess."""
+For incomplete or trailing sentences (common in real-time speech), translate what is there. Do NOT complete or guess.
+
+REMINDER: Your entire response must be in English only. Never output Portuguese text under any circumstance."""
 
 
 def init_translator(api_key: Optional[str] = None, model: Optional[str] = None) -> bool:
@@ -157,6 +165,21 @@ def init_translator(api_key: Optional[str] = None, model: Optional[str] = None) 
         return False
 
 
+def _looks_portuguese(text: str) -> bool:
+    """Heurística simples: detecta se o texto ainda está em português."""
+    if not text:
+        return False
+    lowered = text.lower()
+    pt_markers = [
+        " que ", " não ", " para ", " com ", " uma ", " dos ", " das ",
+        " é ", " você ", " nós ", " está ", " são ", " isso ", " também ",
+        "ção ", "ções ", "ão ", "ções.", "ção.", " pelo ", " pela ",
+    ]
+    hits = sum(1 for marker in pt_markers if marker in f" {lowered} ")
+    has_pt_chars = any(ch in text for ch in "ãõçâêáíóú")
+    return hits >= 2 or (has_pt_chars and hits >= 1)
+
+
 def translate_pt_to_en(text: str) -> Optional[str]:
     """
     Traduz PT -> EN via Groq.
@@ -168,25 +191,46 @@ def translate_pt_to_en(text: str) -> Optional[str]:
     if _client is None:
         return None
 
-    try:
-        response = _client.chat.completions.create(
-            model=_model_name,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": text.strip()},
-            ],
-            temperature=0.2,
-            max_tokens=500,
-            timeout=8.0,
-        )
-        translated = response.choices[0].message.content.strip()
-        # Remove aspas que o modelo às vezes adiciona
-        if len(translated) >= 2 and translated.startswith('"') and translated.endswith('"'):
-            translated = translated[1:-1]
-        return translated
-    except Exception as e:
-        print(f"[TRADUTOR] Falha na Groq: {e}")
+    def _call_groq(extra_instruction: str = "") -> Optional[str]:
+        user_content = text.strip()
+        if extra_instruction:
+            user_content = f"{extra_instruction}\n\n{user_content}"
+        try:
+            response = _client.chat.completions.create(
+                model=_model_name,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content},
+                ],
+                temperature=0.2,
+                max_tokens=500,
+                timeout=8.0,
+            )
+            result = response.choices[0].message.content.strip()
+            if len(result) >= 2 and result.startswith('"') and result.endswith('"'):
+                result = result[1:-1]
+            return result
+        except Exception as e:
+            print(f"[TRADUTOR] Falha na Groq: {e}")
+            return None
+
+    translated = _call_groq()
+
+    if translated is None:
         return None
+
+    if _looks_portuguese(translated):
+        print(f"[TRADUTOR] Saída ainda em PT, tentando novamente: {translated[:60]}...")
+        retry = _call_groq(
+            "IMPORTANT: Your previous response was still in Portuguese. "
+            "You MUST respond ONLY in English. Translate the following text completely to English:"
+        )
+        if retry is not None and not _looks_portuguese(retry):
+            return retry
+        print(f"[TRADUTOR] Falha na 2ª tentativa, descartando bloco: {translated[:60]}...")
+        return None
+
+    return translated
 
 
 def is_available() -> bool:

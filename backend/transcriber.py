@@ -267,6 +267,22 @@ def transcribe_audio(wav_path: str) -> Optional[str]:
 
 # ── Fallback de tradução via Whisper local ─────────────────────────────────────
 
+def _looks_portuguese_fallback(text: str) -> bool:
+    """Heurística simples: detecta se o texto ainda está em português.
+    Duplicada de translator.py para evitar import circular."""
+    if not text:
+        return False
+    lowered = text.lower()
+    pt_markers = [
+        " que ", " não ", " para ", " com ", " uma ", " dos ", " das ",
+        " é ", " você ", " nós ", " está ", " são ", " isso ", " também ",
+        "ção ", "ções ", "ão ", "ções.", "ção.", " pelo ", " pela ",
+    ]
+    hits = sum(1 for marker in pt_markers if marker in f" {lowered} ")
+    has_pt_chars = any(ch in text for ch in "ãõçâêáíóú")
+    return hits >= 2 or (has_pt_chars and hits >= 1)
+
+
 def whisper_translate_fallback(wav_path: str) -> Optional[str]:
     """
     FALLBACK: Whisper local traduz direto PT->EN.
@@ -284,6 +300,10 @@ def whisper_translate_fallback(wav_path: str) -> Optional[str]:
     is_halluc, reason = _is_hallucination(text, no_speech_prob)
     if is_halluc:
         print(f"[ANTI-ALUCINAÇÃO/FALLBACK] Descartado: {reason}")
+        return None
+
+    if _looks_portuguese_fallback(text):
+        print(f"[FALLBACK] Texto ainda em PT, descartando bloco: {text[:60] if text else ''}...")
         return None
 
     return text
