@@ -30,7 +30,7 @@ _device_str = os.getenv("AUDIO_DEVICE_INDEX")
 AUDIO_DEVICE_INDEX: Optional[int] = int(_device_str) if _device_str else None
 WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "small")
 GROQ_API_KEY: Optional[str] = os.getenv("GROQ_API_KEY")
-GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
 # --- Estado compartilhado ---
 audio_queue: sync_queue.Queue = sync_queue.Queue()

@@ -13,7 +13,7 @@ except ImportError:
     _GROQ_AVAILABLE = False
 
 _client: Optional[object] = None
-_model_name: str = "llama-3.3-70b-versatile"
+_model_name: str = "openai/gpt-oss-120b"
 
 
 SYSTEM_PROMPT = """You are a professional simultaneous interpreter for the Seventh-day Adventist Church (SDA / IASD).
