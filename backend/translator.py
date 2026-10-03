@@ -203,10 +203,15 @@ def translate_pt_to_en(text: str) -> Optional[str]:
                     {"role": "user", "content": user_content},
                 ],
                 temperature=0.2,
-                max_tokens=500,
+                max_tokens=1000,
                 timeout=8.0,
+                extra_body={"reasoning_effort": "low"},
             )
-            result = response.choices[0].message.content.strip()
+            content = response.choices[0].message.content or ""
+            result = content.strip()
+            if not result:
+                print("[TRADUTOR] ⚠️ Resposta vazia do modelo")
+                return None
             if len(result) >= 2 and result.startswith('"') and result.endswith('"'):
                 result = result[1:-1]
             return result
