@@ -14,26 +14,23 @@ _groq_client: Optional[object] = None
 _model_lock = threading.Lock()
 _model_name: str = "small"   # sobrescrito por set_local_model_name() no startup
 
-# ── Prompt inicial teológico adventista ───────────────────────────────────────
-# Orienta o Whisper sobre o vocabulário esperado antes de ouvir o áudio.
-# Máximo ~224 tokens — não exceder.
+# ── Prompt inicial teológico adventista ──────────────────────
+# Só palavras raras/específicas; o Whisper já conhece o vocabulário comum.
+# LIMITES: Groq rejeita (erro 400) se passar o limite em BYTES UTF-8;
+# Whisper usa no máximo ~224 tokens. Manter abaixo de 500 bytes.
 THEOLOGICAL_PROMPT_PT = (
-    "Sermão da Igreja Adventista do Sétimo Dia: Sábado, Escola Sabatina, "
-    "Espírito de Profecia, Ellen White, Irmã White, Três Mensagens Angélicas, "
-    "Juízo Investigativo, Santuário, Grande Conflito, Remanescente, Segunda Vinda, "
-    "Estado dos Mortos, Santa Ceia, Lava-pés, Dízimos e Ofertas, Ancião, Diácono, "
-    "Diaconisa, Pastor distrital, Espírito Santo. Livros da Bíblia: Gênesis, Génesis, "
-    "Êxodo, Levítico, Números, Deuteronômio, Josué, Juízes, Rute, Samuel, Reis, "
-    "Crônicas, Esdras, Neemias, Ester, Jó, Salmos, Provérbios, Eclesiastes, Cantares, "
-    "Isaías, Jeremias, Lamentações, Ezequiel, Daniel, Oseias, Joel, Amós, Obadias, "
-    "Jonas, Miqueias, Naum, Habacuque, Sofonias, Ageu, Zacarias, Malaquias, Mateus, "
-    "Marcos, Lucas, João, Atos, Romanos, Coríntios, Gálatas, Efésios, Filipenses, "
-    "Colossenses, Tessalonicenses, Timóteo, Tito, Filemom, Hebreus, Tiago, Pedro, "
-    "Judas, Apocalipse. Amém, Aleluia, Glória a Deus, Bênção, Graça, Salvação, "
-    "Redenção, Justificação, Santificação, Profecia, Ressurreição, batismo, baptismo, Evangelho eterno. Caminho a Cristo, Patriarcas e Profetas, Profetas e Reis, "
-    "Desejado de Todas as Nações, Atos dos Apóstolos, Testemunhos para a Igreja, "
-    "lei de Deus, sábado bíblico, saúde e temperança, profecia dos 2300 dias."
+    "Sermão da Igreja Adventista do Sétimo Dia. Sábado, Escola Sabatina, "
+    "Espírito de Profecia, Ellen White, Três Mensagens Angélicas, "
+    "Juízo Investigativo, Santuário, Grande Conflito, Remanescente, Lava-pés, "
+    "Dízimos e Ofertas, Ancião, Diaconisa. Leitura de Levítico, Deuteronômio, "
+    "Eclesiastes, Habacuque, Sofonias, Ageu, Obadias, Tessalonicenses, "
+    "Filemom, Apocalipse. Amém, Aleluia."
 )
+
+_PROMPT_BYTES = len(THEOLOGICAL_PROMPT_PT.encode("utf-8"))
+if _PROMPT_BYTES > 500:
+    print(f"[TRANSCRITOR] ⚠️ ATENÇÃO: prompt teológico tem {_PROMPT_BYTES} bytes "
+          f"(máx. 500). O Groq vai rejeitar TODAS as transcrições!")
 
 # Frases que o Whisper alucina (treinado em legendas de YouTube/etc)
 HALLUCINATION_PHRASES = {
@@ -247,6 +244,10 @@ def transcribe_audio(wav_path: str) -> Optional[str]:
             return text
 
         except Exception as e:
+            err = str(e)
+            if "400" in err or "invalid_request" in err or "invalid_prompt" in err:
+                print(f"[TRANSCRITOR] ❌ GROQ REJEITOU O PEDIDO (erro de configuração, "
+                      f"vai repetir em todos os blocos): {e}")
             print(f"[TRANSCRITOR] ⚠️  Falha Groq Whisper, usando local: {e}")
 
     # 2. ── Fallback: Whisper local ──
