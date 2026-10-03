@@ -5,6 +5,8 @@ import os
 import uuid
 import queue
 import threading
+import time
+import traceback
 from typing import Optional
 
 # Configurações de áudio
@@ -86,21 +88,32 @@ def _capture_loop(output_queue: queue.Queue, device_index: Optional[int], stop_e
 
     print(f"Capturando áudio... (chunks de {RECORD_SECONDS}s, canais={channels})")
 
+    consecutive_errors = 0
     try:
         while not stop_event.is_set():
-            frames = []
+            try:
+                frames = []
 
-            # Lê RECORD_SECONDS segundos de áudio
-            for _ in range(int(RATE / CHUNK * RECORD_SECONDS)):
-                if stop_event.is_set():
+                # Lê RECORD_SECONDS segundos de áudio
+                for _ in range(int(RATE / CHUNK * RECORD_SECONDS)):
+                    if stop_event.is_set():
+                        break
+                    print("Lendo chunk...")
+                    data = stream.read(CHUNK, exception_on_overflow=False)
+                    frames.append(data)
+
+                if frames:
+                    wav_path = _save_wav(frames, p, channels)
+                    output_queue.put(wav_path)
+
+                consecutive_errors = 0
+            except Exception:
+                consecutive_errors += 1
+                print("[CAPTURA] Erro, a tentar continuar:\n" + traceback.format_exc())
+                if consecutive_errors >= 10:
+                    print("[CAPTURA] Demasiados erros, a parar")
                     break
-                print("Lendo chunk...")
-                data = stream.read(CHUNK, exception_on_overflow=False)
-                frames.append(data)
-
-            if frames:
-                wav_path = _save_wav(frames, p, channels)
-                output_queue.put(wav_path)
+                time.sleep(0.5)
 
     finally:
         stream.stop_stream()

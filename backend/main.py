@@ -3,6 +3,7 @@ import asyncio
 import os
 os.environ["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + os.environ.get("PATH", "")
 import time
+import traceback
 import queue as sync_queue
 import json
 from contextlib import asynccontextmanager
@@ -54,6 +55,16 @@ stats: dict = {
 }
 
 
+def _on_process_loop_done(task: asyncio.Task):
+    """Alarme: avisa se o process_loop terminar com exceção (não por cancelamento)."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        print(f"[LOOP] process_loop MORREU: {exc!r}")
+        traceback.print_exception(type(exc), exc, exc.__traceback__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _capture_stop_event
@@ -68,6 +79,7 @@ async def lifespan(app: FastAPI):
     stats["translator_active"] = translator_ok
     _capture_stop_event = start_capture(audio_queue, AUDIO_DEVICE_INDEX)
     process_task = asyncio.create_task(process_loop())
+    process_task.add_done_callback(_on_process_loop_done)
     cleanup_task = asyncio.create_task(cleanup_loop())
     tts_task = asyncio.create_task(tts_loop())
     yield
@@ -106,66 +118,80 @@ def broadcast(queues, event):
 async def process_loop():
     """Lê chunks da fila, processa com Whisper + Kokoro, notifica clientes SSE."""
     while True:
-        if is_paused:
-            await asyncio.sleep(0.5)
-            continue
-
+        wav_path = None
+        # CancelledError é BaseException (Python 3.8+), não é apanhado aqui
         try:
-            wav_path = audio_queue.get_nowait()
-        except sync_queue.Empty:
-            await asyncio.sleep(0.1)
-            continue
+            if is_paused:
+                await asyncio.sleep(0.5)
+                continue
 
-        # 1. Transcreve áudio em PT (com filtros anti-alucinação)
-        pt_text = await asyncio.to_thread(transcribe_audio, wav_path)
-        if pt_text is None:
-            # Era alucinação ou silêncio — descarta o .wav e segue
-            stats["hallucinations_filtered"] += 1
-            await asyncio.to_thread(history.log_block, None, None, None, "hallucination")
-            await asyncio.to_thread(cleanup_wav, wav_path)
-            continue
+            try:
+                wav_path = audio_queue.get_nowait()
+            except sync_queue.Empty:
+                await asyncio.sleep(0.1)
+                continue
 
-        # 2. Tenta traduzir PT -> EN com Groq
-        text = await asyncio.to_thread(translator.translate_pt_to_en, pt_text)
-
-        # 3. Fallback: se Groq falhou, usa Whisper como tradutor
-        if text is None:
-            stats["translator_failures"] += 1
-            print(f"[FALLBACK] Groq falhou, usando Whisper para: {pt_text[:50]}")
-            text = await asyncio.to_thread(whisper_translate_fallback, wav_path)
-            if text is None:
-                await asyncio.to_thread(history.log_block, None, pt_text, None, "translation_failed")
+            # 1. Transcreve áudio em PT (com filtros anti-alucinação)
+            pt_text = await asyncio.to_thread(transcribe_audio, wav_path)
+            if pt_text is None:
+                # Era alucinação ou silêncio — descarta o .wav e segue
+                stats["hallucinations_filtered"] += 1
+                await asyncio.to_thread(history.log_block, None, None, None, "hallucination")
                 await asyncio.to_thread(cleanup_wav, wav_path)
                 continue
 
-        # 4. Limpa o .wav após processamento completo
-        await asyncio.to_thread(cleanup_wav, wav_path)
+            # 2. Tenta traduzir PT -> EN com Groq
+            text = await asyncio.to_thread(translator.translate_pt_to_en, pt_text)
 
-        if not text:
+            # 3. Fallback: se Groq falhou, usa Whisper como tradutor
+            if text is None:
+                stats["translator_failures"] += 1
+                print(f"[FALLBACK] Groq falhou, usando Whisper para: {pt_text[:50]}")
+                text = await asyncio.to_thread(whisper_translate_fallback, wav_path)
+                if text is None:
+                    await asyncio.to_thread(history.log_block, None, pt_text, None, "translation_failed")
+                    await asyncio.to_thread(cleanup_wav, wav_path)
+                    continue
+
+            # 4. Limpa o .wav após processamento completo
+            await asyncio.to_thread(cleanup_wav, wav_path)
+
+            if not text:
+                continue
+
+            # 5. Sequência + broadcast IMEDIATO do texto (sem esperar o TTS)
+            global _seq_counter
+            _seq_counter += 1
+            seq = _seq_counter
+
+            stats["chunks_processed"] += 1
+            stats["last_text"] = text
+
+            member_event = json.dumps({"seq": seq, "text": text, "audio_id": None})
+            operator_event = json.dumps({
+                "seq": seq, "text": text, "audio_id": None,
+                "clients": len(clients), "chunks": stats["chunks_processed"],
+            })
+
+            print(f"[TRADUÇÃO] {text[:60]}...")
+
+            broadcast(clients, member_event)
+            broadcast(operator_clients, operator_event)
+            await asyncio.to_thread(history.log_block, seq, pt_text, text, "ok")
+
+            # 6. Enfileira o TTS (processado em ordem pelo tts_loop)
+            await tts_queue.put((seq, text, current_voice))
+        except Exception:
+            print("[LOOP] Erro no bloco, a saltar:\n" + traceback.format_exc())
             continue
-
-        # 5. Sequência + broadcast IMEDIATO do texto (sem esperar o TTS)
-        global _seq_counter
-        _seq_counter += 1
-        seq = _seq_counter
-
-        stats["chunks_processed"] += 1
-        stats["last_text"] = text
-
-        member_event = json.dumps({"seq": seq, "text": text, "audio_id": None})
-        operator_event = json.dumps({
-            "seq": seq, "text": text, "audio_id": None,
-            "clients": len(clients), "chunks": stats["chunks_processed"],
-        })
-
-        print(f"[TRADUÇÃO] {text[:60]}...")
-
-        broadcast(clients, member_event)
-        broadcast(operator_clients, operator_event)
-        await asyncio.to_thread(history.log_block, seq, pt_text, text, "ok")
-
-        # 6. Enfileira o TTS (processado em ordem pelo tts_loop)
-        await tts_queue.put((seq, text, current_voice))
+        finally:
+            # Garante que o .wav é apagado mesmo em erro (cleanup_wav é idempotente).
+            # Síncrono de propósito: não fazer await num finally durante cancelamento.
+            if wav_path:
+                try:
+                    cleanup_wav(wav_path)
+                except Exception:
+                    pass
 
 
 async def tts_loop():
