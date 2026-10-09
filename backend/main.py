@@ -30,7 +30,14 @@ _device_str = os.getenv("AUDIO_DEVICE_INDEX")
 AUDIO_DEVICE_INDEX: Optional[int] = int(_device_str) if _device_str else None
 WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "small")
 GROQ_API_KEY: Optional[str] = os.getenv("GROQ_API_KEY")
-GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+_DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+# Modelos que o Groq desligou — se o .env ainda os pedir, usar o padrão.
+_DEPRECATED_GROQ_MODELS = {"llama-3.3-70b-versatile", "llama-3.1-8b-instant"}
+GROQ_MODEL: str = os.getenv("GROQ_MODEL", _DEFAULT_GROQ_MODEL)
+if GROQ_MODEL in _DEPRECATED_GROQ_MODELS:
+    print(f"[CONFIG] ⚠️ GROQ_MODEL='{GROQ_MODEL}' foi desativado pelo Groq; "
+          f"a usar '{_DEFAULT_GROQ_MODEL}'.")
+    GROQ_MODEL = _DEFAULT_GROQ_MODEL
 
 # --- Estado compartilhado ---
 audio_queue: sync_queue.Queue = sync_queue.Queue()
