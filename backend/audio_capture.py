@@ -8,6 +8,7 @@ import threading
 import time
 import traceback
 from typing import Optional
+import alerts
 
 # Configurações de áudio
 RATE = 16000        # Taxa de amostragem: 16kHz (adequado para voz)
@@ -84,6 +85,7 @@ def _capture_loop(output_queue: queue.Queue, device_index: Optional[int], stop_e
 
     if stream is None:
         p.terminate()
+        alerts.send(f"🚨 Microfone não abre (device_index={device_index}).", key="mic_open")
         raise RuntimeError(f"Não foi possível abrir o microfone (device_index={device_index}). Verifique o AUDIO_DEVICE_INDEX no .env")
 
     print(f"Capturando áudio... (chunks de {RECORD_SECONDS}s, canais={channels})")
@@ -112,6 +114,7 @@ def _capture_loop(output_queue: queue.Queue, device_index: Optional[int], stop_e
                 print("[CAPTURA] Erro, a tentar continuar:\n" + traceback.format_exc())
                 if consecutive_errors >= 10:
                     print("[CAPTURA] Demasiados erros, a parar")
+                    alerts.send("🚨 CRÍTICO: captura de áudio PAROU após 10 erros seguidos.", key="capture_stopped")
                     break
                 time.sleep(0.5)
 

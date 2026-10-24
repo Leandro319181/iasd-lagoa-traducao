@@ -24,6 +24,7 @@ from tts import text_to_speech
 from audio_capture import start_capture, get_audio_devices_list
 import updater
 import history
+import alerts
 
 # --- Configurações do .env ---
 _device_str = os.getenv("AUDIO_DEVICE_INDEX")
@@ -37,6 +38,7 @@ GROQ_MODEL: str = os.getenv("GROQ_MODEL", _DEFAULT_GROQ_MODEL)
 if GROQ_MODEL in _DEPRECATED_GROQ_MODELS:
     print(f"[CONFIG] ⚠️ GROQ_MODEL='{GROQ_MODEL}' foi desativado pelo Groq; "
           f"a usar '{_DEFAULT_GROQ_MODEL}'.")
+    alerts.send(f"⚠️ .env pede modelo desativado '{GROQ_MODEL}'. A usar o padrão.", key="config")
     GROQ_MODEL = _DEFAULT_GROQ_MODEL
 
 # --- Estado compartilhado ---
@@ -69,6 +71,7 @@ def _on_process_loop_done(task: asyncio.Task):
     exc = task.exception()
     if exc is not None:
         print(f"[LOOP] process_loop MORREU: {exc!r}")
+        alerts.send(f"🚨 CRÍTICO: o processamento PAROU. Reiniciar o servidor. Erro: {exc!r}", key="loop_died")
         traceback.print_exception(type(exc), exc, exc.__traceback__)
 
 
@@ -89,7 +92,22 @@ async def lifespan(app: FastAPI):
     process_task.add_done_callback(_on_process_loop_done)
     cleanup_task = asyncio.create_task(cleanup_loop())
     tts_task = asyncio.create_task(tts_loop())
+    alerts.send(
+        "✅ Servidor arrancou\n"
+        f"Versão: {alerts.git_version()}\n"
+        f"Modelo: {GROQ_MODEL}\n"
+        f"Tradutor Groq: {'OK' if translator_ok else 'FALHOU'}\n"
+        f"Transcrição Groq: {'OK' if stats.get('groq_transcription') else 'FALHOU'}"
+    )
     yield
+    alerts.send(
+        "⏹ Servidor parado. Resumo:\n"
+        f"Blocos traduzidos: {stats.get('chunks_processed', 0)}\n"
+        f"Falhas de tradução: {stats.get('translator_failures', 0)}\n"
+        f"Alucinações filtradas: {stats.get('hallucinations_filtered', 0)}\n"
+        f"Falhas de voz (TTS): {stats.get('tts_failures', 0)}",
+        wait=True,
+    )
     if _capture_stop_event:
         _capture_stop_event.set()
     process_task.cancel()
@@ -154,6 +172,7 @@ async def process_loop():
             if text is None:
                 stats["translator_failures"] += 1
                 print(f"[FALLBACK] Groq falhou, usando Whisper para: {pt_text[:50]}")
+                alerts.send("⚠️ Tradução Groq falhou — a usar Whisper local (lento).", key="fallback")
                 text = await asyncio.to_thread(whisper_translate_fallback, wav_path)
                 if text is None:
                     await asyncio.to_thread(history.log_block, None, pt_text, None, "translation_failed")
@@ -190,6 +209,7 @@ async def process_loop():
             await tts_queue.put((seq, text, current_voice))
         except Exception:
             print("[LOOP] Erro no bloco, a saltar:\n" + traceback.format_exc())
+            alerts.send(f"⚠️ Erro num bloco (saltado): {traceback.format_exc().strip().splitlines()[-1]}", key="loop_block")
             continue
         finally:
             # Garante que o .wav é apagado mesmo em erro (cleanup_wav é idempotente).
@@ -296,6 +316,7 @@ async def _auto_stop_after_delay():
         await asyncio.sleep(AUTO_STOP_DELAY)
         if len(clients) == 0 and not is_paused:
             _pause_translation("auto: sem membros há 3 min")
+            alerts.send("⏸ Tradução pausou sozinha (sem irmãos há 3 min)")
     except asyncio.CancelledError:
         pass
 
@@ -308,6 +329,7 @@ def _on_member_connected():
     _auto_stop_task = None
     if len(clients) == 1 and is_paused:
         _resume_translation("auto: primeiro membro ligado")
+        alerts.send("▶️ Tradução arrancou sozinha (1.º irmão ligado)")
 
 
 def _on_member_disconnected():
@@ -550,6 +572,7 @@ async def control_apply_update():
         print("[UPDATE] Sinal de reload enviado aos clientes.")
     else:
         print("[UPDATE] Erro ao aplicar:", result["error"])
+        alerts.send(f"⚠️ Atualização falhou: {result['error'][:300]}", key="update")
     return JSONResponse(result)
 
 

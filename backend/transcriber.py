@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 import os
 import whisper
 import threading
+import alerts
 
 _model: Optional[object] = None
 _groq_client: Optional[object] = None
@@ -248,11 +249,14 @@ def transcribe_audio(wav_path: str) -> Optional[str]:
             if "400" in err or "invalid_request" in err or "invalid_prompt" in err:
                 print(f"[TRANSCRITOR] ❌ GROQ REJEITOU O PEDIDO (erro de configuração, "
                       f"vai repetir em todos os blocos): {e}")
+                alerts.send(f"🚨 Groq REJEITOU a transcrição (configuração): {str(e)[:300]}", key="groq_rejected")
             print(f"[TRANSCRITOR] ⚠️  Falha Groq Whisper, usando local: {e}")
+            alerts.send(f"⚠️ Transcrição Groq falhou: {str(e)[:300]}", key="groq_whisper")
 
     # 2. ── Fallback: Whisper local ──
     if _ensure_model() is None:
         print("[TRANSCRITOR] ❌ Nem Groq nem modelo local disponível!")
+        alerts.send("🚨 CRÍTICO: nenhum transcritor disponível.", key="no_transcriber")
         return None
 
     text, no_speech_prob = _transcribe_local(wav_path, task="transcribe")

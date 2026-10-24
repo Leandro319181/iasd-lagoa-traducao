@@ -5,6 +5,7 @@ Especializado em contexto da Igreja Adventista do Sétimo Dia.
 from __future__ import annotations
 import os
 from typing import Optional
+import alerts
 
 try:
     from groq import Groq
@@ -211,12 +212,14 @@ def translate_pt_to_en(text: str) -> Optional[str]:
             result = content.strip()
             if not result:
                 print("[TRADUTOR] ⚠️ Resposta vazia do modelo")
+                alerts.send("⚠️ Modelo de tradução devolveu resposta vazia.", key="empty_response")
                 return None
             if len(result) >= 2 and result.startswith('"') and result.endswith('"'):
                 result = result[1:-1]
             return result
         except Exception as e:
             print(f"[TRADUTOR] Falha na Groq: {e}")
+            alerts.send(f"⚠️ Tradução Groq falhou: {str(e)[:300]}", key="groq_translate")
             return None
 
     translated = _call_groq()
@@ -233,6 +236,7 @@ def translate_pt_to_en(text: str) -> Optional[str]:
         if retry is not None and not _looks_portuguese(retry):
             return retry
         print(f"[TRADUTOR] Falha na 2ª tentativa, descartando bloco: {translated[:60]}...")
+        alerts.send("⚠️ Bloco descartado: tradução saiu em português 2 vezes.", key="pt_discard")
         return None
 
     return translated
