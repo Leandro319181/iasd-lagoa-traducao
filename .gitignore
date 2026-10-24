@@ -36,3 +36,6 @@ backend/logs/
 *.log
 imagens/
 WhatsApp*
+
+# Ferramentas de IA
+.kilo/

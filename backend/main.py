@@ -269,11 +269,61 @@ async def service_worker():
 
 # --- SSE ---
 
+# ── Controlo automático da tradução por presença de membros ──
+AUTO_STOP_DELAY = 180  # segundos sem membros até pausar automaticamente
+_auto_stop_task = None
+
+
+def _resume_translation(reason: str):
+    global is_paused
+    is_paused = False
+    while not audio_queue.empty():
+        try:
+            audio_queue.get_nowait()
+        except Exception:
+            break
+    print(f"[CONTROLO] Tradução retomada ({reason}) — fila de áudio limpa")
+
+
+def _pause_translation(reason: str):
+    global is_paused
+    is_paused = True
+    print(f"[CONTROLO] Tradução pausada ({reason})")
+
+
+async def _auto_stop_after_delay():
+    try:
+        await asyncio.sleep(AUTO_STOP_DELAY)
+        if len(clients) == 0 and not is_paused:
+            _pause_translation("auto: sem membros há 3 min")
+    except asyncio.CancelledError:
+        pass
+
+
+def _on_member_connected():
+    global _auto_stop_task
+    if _auto_stop_task is not None and not _auto_stop_task.done():
+        _auto_stop_task.cancel()
+        print("[AUTO] Membro voltou — paragem automática cancelada")
+    _auto_stop_task = None
+    if len(clients) == 1 and is_paused:
+        _resume_translation("auto: primeiro membro ligado")
+
+
+def _on_member_disconnected():
+    global _auto_stop_task
+    if len(clients) == 0 and not is_paused:
+        if _auto_stop_task is None or _auto_stop_task.done():
+            _auto_stop_task = asyncio.create_task(_auto_stop_after_delay())
+            print("[AUTO] Sem membros — tradução pausa em 3 min se ninguém voltar")
+
+
 @app.get("/events")
 async def events():
     """SSE para clientes membros."""
     client_queue: asyncio.Queue = asyncio.Queue(maxsize=10)
     clients.append(client_queue)
+    _on_member_connected()
 
     async def event_generator():
         try:
@@ -287,6 +337,7 @@ async def events():
         finally:
             if client_queue in clients:
                 clients.remove(client_queue)
+            _on_member_disconnected()
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -362,23 +413,19 @@ async def set_voice(request: Request):
 
 @app.post("/control/pause")
 async def control_pause():
-    global is_paused
-    is_paused = True
-    print("[CONTROLO] Tradução pausada")
+    _pause_translation("operador")
     return JSONResponse({"paused": True})
 
 
 @app.post("/control/resume")
 async def control_resume():
-    global is_paused
-    is_paused = False
-    # Esvaziar áudio acumulado durante a pausa
-    while not audio_queue.empty():
-        try:
-            audio_queue.get_nowait()
-        except Exception:
-            break
-    print("[CONTROLO] Tradução retomada — fila de áudio limpa")
+    global _auto_stop_task
+    _resume_translation("operador")
+    # Reinicia o temporizador: se não houver membros, pausa em 3 min
+    if _auto_stop_task is not None and not _auto_stop_task.done():
+        _auto_stop_task.cancel()
+    _auto_stop_task = None
+    _on_member_disconnected()
     return JSONResponse({"paused": False})
 
 
