@@ -211,9 +211,9 @@ def translate_pt_to_en(text: str) -> Optional[str]:
             content = response.choices[0].message.content or ""
             result = content.strip()
             if not result:
-                print("[TRADUTOR] ⚠️ Resposta vazia do modelo")
-                alerts.send("⚠️ Modelo de tradução devolveu resposta vazia.", key="empty_response")
-                return None
+                # Vazio = o modelo considerou ruído/sem fala (regra 2 do SYSTEM_PROMPT)
+                print("[TRADUTOR] Modelo devolveu vazio (ruído) — bloco saltado")
+                return ""
             if len(result) >= 2 and result.startswith('"') and result.endswith('"'):
                 result = result[1:-1]
             return result
@@ -226,6 +226,9 @@ def translate_pt_to_en(text: str) -> Optional[str]:
 
     if translated is None:
         return None
+
+    if translated == "":
+        return ""  # ruído: o chamador salta o bloco sem fallback
 
     if _looks_portuguese(translated):
         print(f"[TRADUTOR] Saída ainda em PT, tentando novamente: {translated[:60]}...")

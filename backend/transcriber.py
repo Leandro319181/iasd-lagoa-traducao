@@ -55,7 +55,22 @@ HALLUCINATION_PHRASES = {
     "[music]",
     "[applause]",
     "[aplausos]",
+    "aplausos",
+    "a aplausos",
+    "música",
+    "risos",
 }
+
+# Padrões que, se aparecerem EM QUALQUER PARTE do texto, indicam alucinação
+# típica do Whisper (legendas do YouTube no treino)
+HALLUCINATION_SUBSTRINGS = (
+    "acesse o nosso site",
+    ".com.br",
+    "amara.org",
+    "inscreva-se no canal",
+    "se inscreva no canal",
+    "obrigado por assistir",
+)
 
 # Limite de probabilidade de "não-fala" — acima disso, descarta
 NO_SPEECH_THRESHOLD = 0.6
@@ -170,6 +185,9 @@ def _is_hallucination(text: str, no_speech_prob: float) -> Tuple[bool, str]:
     text_lower = text.lower().strip().rstrip(".,!?")
     if text_lower in HALLUCINATION_PHRASES:
         return True, f"frase alucinada conhecida: '{text[:40]}'"
+
+    if any(p in text_lower for p in HALLUCINATION_SUBSTRINGS):
+        return True, f"padrão alucinado conhecido: '{text[:40]}'"
 
     if _is_non_latin_heavy(text):
         return True, "texto não-latino (provável chinês/japonês alucinado)"

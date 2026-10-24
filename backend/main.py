@@ -168,6 +168,13 @@ async def process_loop():
             # 2. Tenta traduzir PT -> EN com Groq
             text = await asyncio.to_thread(translator.translate_pt_to_en, pt_text)
 
+            # 2b. Modelo devolveu vazio = ruído/sem fala → salta, sem fallback
+            if text == "":
+                stats["noise_skipped"] = stats.get("noise_skipped", 0) + 1
+                await asyncio.to_thread(history.log_block, None, pt_text, None, "noise")
+                await asyncio.to_thread(cleanup_wav, wav_path)
+                continue
+
             # 3. Fallback: se Groq falhou, usa Whisper como tradutor
             if text is None:
                 stats["translator_failures"] += 1

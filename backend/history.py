@@ -35,7 +35,7 @@ def init_db(path: str = "logs/historico.db"):
 
 def log_block(seq: Optional[int], pt_text: Optional[str],
               en_text: Optional[str], status: str):
-    """Grava um bloco. status: 'ok' | 'hallucination' | 'translation_failed'."""
+    """Grava um bloco. status: 'ok' | 'hallucination' | 'noise' | 'translation_failed'."""
     created_at = time.strftime("%Y-%m-%d %H:%M:%S")
     try:
         with _lock:
