@@ -6,8 +6,8 @@ import json
 
 @pytest.fixture
 def client():
-    with patch("main.load_model"), \
-         patch("main.start_capture", return_value=MagicMock()):
+    with patch("main.start_capture", return_value=MagicMock()), \
+         patch("history.init_db"):
         import main
         main.clients.clear()
         main.operator_clients.clear()
@@ -49,8 +49,8 @@ def test_events_retorna_event_stream(client):
 @pytest.fixture
 def client_v2():
     """Fixture com estado limpo para testes dos endpoints de controlo."""
-    with patch("main.load_model"), \
-         patch("main.start_capture", return_value=MagicMock()):
+    with patch("main.start_capture", return_value=MagicMock()), \
+         patch("history.init_db"):
         import main
         main.clients.clear()
         main.operator_clients.clear()

@@ -1,65 +1,38 @@
 import pytest
-from unittest.mock import patch, MagicMock
-import os
+from transcriber import _is_hallucination
 
 
-def test_load_model_chama_whisper_load_model():
-    """Garante que load_model chama whisper.load_model com o nome correto."""
-    with patch("transcriber.whisper") as mock_whisper:
-        import transcriber
-        transcriber._model = None  # reseta para forçar o carregamento
-        transcriber.load_model("tiny")
-        mock_whisper.load_model.assert_called_once_with("tiny")
+@pytest.mark.parametrize("texto", [
+    "Aplausos",
+    "A Aplausos.",
+    "Música",
+    "Obrigado por assistir!",
+    "Acesse o nosso site www.sertimus.com.br.",
+    "Acesse o nosso site [www.mesmerism.com.br](https://www.mesmerism.com.br).",
+    "Legendas pela comunidade Amara.org",
+    "Se inscreva no canal e deixe seu like",
+])
+def test_alucinacoes_conhecidas_sao_filtradas(texto):
+    filtrado, motivo = _is_hallucination(texto, 0.0)
+    assert filtrado is True, f"Devia filtrar: {texto}"
 
 
-def test_transcribe_retorna_texto_traduzido(tmp_path):
-    """Garante que transcribe_and_translate chama o modelo e retorna o texto."""
-    wav_file = tmp_path / "audio.wav"
-    wav_file.write_bytes(b"fake_wav_data")
-
-    mock_model = MagicMock()
-    mock_model.transcribe.return_value = {"text": "  Hello world  "}
-
-    with patch("transcriber._model", mock_model):
-        import transcriber
-        result = transcriber.transcribe_and_translate(str(wav_file))
-
-    assert result == "Hello world"
-    mock_model.transcribe.assert_called_once_with(
-        str(wav_file), task="translate", language="pt"
-    )
+@pytest.mark.parametrize("texto", [
+    "Faz saber ao Rei de Israel as palavras que falas.",
+    "Irmãos, abram as vossas Bíblias no livro de Salmos.",
+    "Ele era um inimigo do povo de Deus.",
+    "Glória a Deus, aleluia!",
+    "Hoje vamos estudar a lição da Escola Sabatina.",
+])
+def test_frases_de_sermao_passam(texto):
+    filtrado, motivo = _is_hallucination(texto, 0.0)
+    assert filtrado is False, f"Não devia filtrar: {texto} ({motivo})"
 
 
-def test_transcribe_deleta_wav_apos_processar(tmp_path):
-    """Garante que o .wav temporário é deletado após transcrição."""
-    wav_file = tmp_path / "audio.wav"
-    wav_file.write_bytes(b"fake_wav_data")
-
-    mock_model = MagicMock()
-    mock_model.transcribe.return_value = {"text": "Test"}
-
-    with patch("transcriber._model", mock_model):
-        import transcriber
-        transcriber.transcribe_and_translate(str(wav_file))
-
-    assert not wav_file.exists()
+def test_texto_vazio_ou_curto_e_filtrado():
+    assert _is_hallucination("", 0.0)[0] is True
+    assert _is_hallucination("ok", 0.0)[0] is True
 
 
-def test_transcribe_sem_modelo_lanca_erro(tmp_path):
-    """Garante que erro claro é lançado se load_model não foi chamado."""
-    wav_file = tmp_path / "audio.wav"
-    wav_file.write_bytes(b"fake")
-
-    with patch("transcriber._model", None):
-        import transcriber
-        with pytest.raises(RuntimeError, match="load_model"):
-            transcriber.transcribe_and_translate(str(wav_file))
-
-
-def test_load_model_usa_small_como_padrao():
-    """Garante que o modelo padrão é 'small' quando nenhum argumento é passado."""
-    with patch("transcriber.whisper") as mock_whisper:
-        import transcriber
-        transcriber._model = None
-        transcriber.load_model()
-        mock_whisper.load_model.assert_called_once_with("small")
+def test_no_speech_alto_e_filtrado():
+    assert _is_hallucination("Irmãos, abram as Bíblias.", 0.9)[0] is True
