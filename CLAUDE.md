@@ -18,3 +18,8 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+
+## Regras de trabalho
+- Antes de qualquer commit, correr: `.venv/bin/python -m pytest -q` (tem de passar tudo)
+- O .venv usa Python 3.9: não usar sintaxe 3.10+ (ex.: `str | None`, `match/case`); usar `Optional[str]`
+
